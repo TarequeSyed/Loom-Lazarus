@@ -72,3 +72,14 @@ Verified record of how Kiro was used to build Loom Lazarus. Procedure: `.kiro/st
 - Screenshots: none
 - Commits: this entry's commit
 - Decisions: one integrator owns `package.json` and every config (amendment A0-1). TypeScript pinned to 6.0.3 rather than 7.0.2, because the boundary tests use the compiler API and version 7 publishes it as unstable. `esbuild`'s install script was approved explicitly after npm blocked it.
+### 2026-11-26  Domain tasks 1.2 (import-boundary test) and 1.3 (Result, branded types, limits, error registry)
+- Surface: Kiro IDE, two `spec-task-execution` sub-agents run in parallel on disjoint files
+- Steering: all always-included files; `testing-standards.md` for the test files
+- Feature Spec: `card-domain-and-loom-engine` tasks 1.2 and 1.3 completed; task 1 complete
+- Hooks fired: "Protect .kiro from .gitignore" (now `fileEdited` on `.gitignore`): both sub-agents reported running its `git check-ignore` command (exit 1, nothing under `.kiro` ignored) even though neither saved `.gitignore`. I could not confirm from the repository whether the hook triggered or the agents ran the check on their own. "Typecheck and test after task": not observed
+- MCP tools used: none
+- Bugfix Spec: none
+- Tests: `npm run check`: typecheck passed, 3 files and 14 tests passed. A planted file importing `../ui/App` and calling `Date.now()` made the boundary test fail with both violations named; the file was then removed and the test passed again
+- Screenshots: none
+- Commits: this entry's commit
+- Decisions: task 1.3 reported its own run with one failing boundary self-test, because it ran while task 1.2 was still correcting a test input; the combined rerun passed. Constructor error codes chosen by task 1.3 (`INVALID_FORMAT`, `POSITION_OUT_OF_RANGE`, `READ_INDEX_OUT_OF_RANGE`, `SEEK_OUT_OF_RANGE`) are recorded for review at the interface freeze.

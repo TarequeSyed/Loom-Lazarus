@@ -24,7 +24,7 @@ Conventions for every task:
 
 ## Tasks
 
-- [ ] 1. Project scaffold and shared primitives
+- [x] 1. Project scaffold and shared primitives
   - [x] 1.1 Create the domain skeleton and verify the integrator's scaffold
     - Do not create `package.json`, `tsconfig.json` or the Vitest configuration. The integrator creates them at milestone M0 for all five specs, with scripts `test` (`vitest --run`) and `typecheck`, dependencies `typescript`, `vitest` and `fast-check`, and the scripts of every other spec.
     - Verify the integrator's scaffold has what the domain needs: strict TypeScript, `vitest --run` discovering `src/domain/**/__tests__`, the `typecheck` script, and `typescript`, `vitest` and `fast-check` as dependencies. If anything is missing, ask the integrator for the change; do not edit those files.
@@ -34,14 +34,14 @@ Conventions for every task:
     - Files owned: `src/domain/__tests__/seeds.ts`, `src/domain/__tests__/helpers.ts`, and the `src/domain` folder skeleton. Config files (`package.json`, `tsconfig.json`, Vitest config) are owned by the integrator.
     - _Requirements: 13.1, 13.3, 16.3_
 
-  - [ ] 1.2 Write the import-boundary test
+  - [x] 1.2 Write the import-boundary test
     - Create `src/domain/__tests__/boundary.test.ts` using the TypeScript compiler API to scan every `.ts` file under `src/domain`, tests included.
     - Fail on imports resolving to `src/vision`, `src/restore`, `src/benchmark`, `src/ui` or `src/workers` (relative or alias form).
     - Fail on the identifiers `document`, `window`, `fetch`, `XMLHttpRequest`, `Date`, `Math.random`, `performance.now`, `setTimeout`, `setInterval`.
     - Add a negative self-test that feeds an in-memory violating source and expects failure.
     - _Requirements: 1.5, 1.6, 1.8_
 
-  - [ ] 1.3 Implement Result, branded coordinate types, limits and the error registry
+  - [x] 1.3 Implement Result, branded coordinate types, limits and the error registry
     - Create `result.ts` (`Result`, `DomainError`, `ViolationReport`, `ReportedError`, `ok`/`err` helpers, `ERROR_CODES` tuple with all codes from Req 16.1 including `MISSING_REQUIRED_FIELD`, derived `ErrorCode`, `ERROR_MESSAGES` with stable text per code).
     - Create `brand.ts` (`GridRow`, `GridColumn`, `ReadIndex`, `WarpIndex`, `PassIndex`, `Millimetres`, `ActionId`, `SequenceNumber`, and `as*` constructors returning `Result`).
     - Create `limits.ts` with the `LIMITS` constant and `SUPPORTED_SCHEMA_VERSIONS = [1]`.

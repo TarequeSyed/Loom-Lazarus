@@ -12,6 +12,37 @@
         "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
         "timestamp": 1795723348057
       }
+    ],
+    "1.2 Write the import-boundary test": [
+      {
+        "executionId": "48a4d429-c338-4069-9060-15c9efd5aa15",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795724392708
+      },
+      {
+        "executionId": "48a4d429-c338-4069-9060-15c9efd5aa15",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795726330928
+      }
+    ],
+    "1.3 Implement Result, branded coordinate types, limits and the error registry": [
+      {
+        "executionId": "48a4d429-c338-4069-9060-15c9efd5aa15",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795724393118
+      },
+      {
+        "executionId": "48a4d429-c338-4069-9060-15c9efd5aa15",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795726331550
+      }
+    ],
+    "1. Project scaffold and shared primitives": [
+      {
+        "executionId": "48a4d429-c338-4069-9060-15c9efd5aa15",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795726331635
+      }
     ]
   }
 }
