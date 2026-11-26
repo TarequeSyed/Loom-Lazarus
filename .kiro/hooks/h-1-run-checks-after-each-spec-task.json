@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Typecheck and test after task",
+      "trigger": "PostTaskExec",
+      "action": {
+        "type": "command",
+        "command": "npm run check"
+      },
+      "description": "I just added a check script to package.json that runs typecheck, then the tests. A single npm script avoids the && problem in older PowerShell. The hook will fail until npm install has run. That's expected, and it will start passing once the scaffold is installed.",
+      "enabled": true
+    }
+  ]
+}

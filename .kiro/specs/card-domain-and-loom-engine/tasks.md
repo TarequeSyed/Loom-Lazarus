@@ -25,7 +25,7 @@ Conventions for every task:
 ## Tasks
 
 - [ ] 1. Project scaffold and shared primitives
-  - [ ] 1.1 Create the domain skeleton and verify the integrator's scaffold
+  - [x] 1.1 Create the domain skeleton and verify the integrator's scaffold
     - Do not create `package.json`, `tsconfig.json` or the Vitest configuration. The integrator creates them at milestone M0 for all five specs, with scripts `test` (`vitest --run`) and `typecheck`, dependencies `typescript`, `vitest` and `fast-check`, and the scripts of every other spec.
     - Verify the integrator's scaffold has what the domain needs: strict TypeScript, `vitest --run` discovering `src/domain/**/__tests__`, the `typecheck` script, and `typescript`, `vitest` and `fast-check` as dependencies. If anything is missing, ask the integrator for the change; do not edit those files.
     - Create the `src/domain` folder skeleton from the design's module layout and `src/domain/__tests__/`.

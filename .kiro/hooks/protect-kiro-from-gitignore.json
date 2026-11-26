@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Protect .kiro from .gitignore",
+      "trigger": "fileEdited",
+      "patterns": [".gitignore"],
+      "action": {
+        "type": "agent",
+        "prompt": ".gitignore was just saved. Read it and run `git check-ignore -v .kiro .kiro/specs .kiro/steering .kiro/hooks .kiro/settings`. If any path is ignored, remove or negate the rule that ignores it, then confirm. Steering, specs, hooks and MCP configuration are submission evidence and must stay committed. Do not change anything else."
+      },
+      "description": "Runs only when .gitignore is saved. Checks that no rule ignores .kiro and fixes it if one does. Earlier this was a PreToolUse hook that fired on every file write and blocked unrelated writes.",
+      "enabled": true
+    }
+  ]
+}

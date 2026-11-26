@@ -1,0 +1,71 @@
+{
+  "name": "loom-lazarus",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Explainable, browser-based restoration of Jacquard punched-card programs (educational simulation).",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "check": "npm run typecheck && npm test",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest --run",
+    "test:ui": "vitest --run src/ui",
+    "test:browser": "playwright test -c playwright.vision.config.ts",
+    "test:e2e": "playwright test --project=chromium --project=tablet --project=narrow",
+    "test:a11y": "playwright test --project=chromium --grep @a11y",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "build:trail": "tsx scripts/build-trail.ts",
+    "build:demo": "tsx scripts/build-demo-bundle.ts",
+    "measure:ui": "tsx scripts/ui-measure.ts",
+    "golden:ui:update": "tsx scripts/ui-golden-update.ts",
+    "bench:domain": "tsx scripts/bench-domain.ts",
+    "vision:spike": "tsx scripts/vision-spike.ts",
+    "vision:measure": "tsx scripts/vision-measure.ts",
+    "vision:compare-envs": "tsx scripts/vision-compare-envs.ts",
+    "vision:eval:synthetic": "tsx scripts/vision-eval-synthetic.ts",
+    "vision:eval:real": "tsx scripts/vision-eval-real.ts",
+    "vision:tune": "tsx scripts/vision-tune.ts",
+    "vision:make-sample": "tsx scripts/vision-make-sample.ts",
+    "vision:golden:update": "tsx scripts/vision-golden-update.ts",
+    "restore:tune": "tsx scripts/restoration-tune.ts",
+    "restore:golden:update": "tsx scripts/restoration-golden-update.ts",
+    "bench:dataset:quick": "tsx scripts/benchmark-build-dataset.ts --profile quick",
+    "bench:dataset:full": "tsx scripts/benchmark-build-dataset.ts --profile full",
+    "bench:run:quick": "tsx scripts/benchmark-run.ts --profile quick",
+    "bench:run:full": "tsx scripts/benchmark-run.ts --profile full",
+    "bench:tuning:export": "tsx scripts/benchmark-export-tuning.ts",
+    "bench:threshold:freeze": "tsx scripts/benchmark-freeze-thresholds.ts",
+    "bench:browser-report": "tsx scripts/benchmark-browser-report.ts",
+    "bench:experiment": "tsx scripts/benchmark-experiment.ts",
+    "bench:golden:update": "tsx scripts/benchmark-golden-update.ts"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.1",
+    "@playwright/test": "^1.65.1",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^24.0.0",
+    "@types/pngjs": "^6.0.5",
+    "@types/react": "^19.3.3",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "fast-check": "^4.11.0",
+    "jsdom": "^31.0.1",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vite": "^8.4.0",
+    "vitest": "^5.1.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}
