@@ -22,6 +22,9 @@ Resolved decisions reflected here:
 - Baselines are exactly B1 deck-majority, B2 column-majority and B3 nearest-neighbour. B0 abstain-all is a test fixture only. It is never exported from `index.ts`, never in `BASELINES`, never in a paired comparison and never in a report.
 - Occlusion_Cover_Fraction is a per-Cell_Window fraction (initial 0.9, bounds (0.5, 1], at least detection's `unknownCoverFrac`, `initial-unconfirmed` until E-2). It is distinct from the per-level `occlusionCoverage` (Occlusion_Extent), a cap on the fraction of a card's readable Cell_Windows that the occlusion model may damage (zero at `none`, below 1, non-decreasing). Neither fixes an acceptance threshold.
 - Q1 (a): the conformance test imports restoration's internal `symmetry.ts`. Q2 (a): the `scripts` entry already landed in `structure.md`, so task 1.1 only verifies it. Q3 (a): detection's `vision-eval-*` scripts delegate to the runner. Q4: reference hardware is the developer machine plus the CI Chromium/Node runner, with its specification recorded beside every measured number.
+- A0-1: `package.json` and all configuration files are created by the integrator at milestone M0, with every `bench:*` script pre-registered. No benchmark task edits them (task 1.2 only verifies the scripts exist).
+- A0-4: benchmark data is synthetic, so every restoration call uses `deckOrigin: "synthetic"` and never `"real"`. Each card that has an image carries a `CardImageProvenance` entry in its Item's `imageProvenance` in the Dataset_Manifest (generator, generatorVersion, sourceId, seed, parametersDigest, imageDigest, with digests written `"sha-256:<lowercase hex>"`), and `adapters/syntheticAttestations.ts` builds restoration's per-card `syntheticAttestations` from it with `buildSyntheticAttestations(manifest, itemId)` and checks it against detection's `imageDigestText` with `checkAttestationsAgainstDetection`. The declaration is the benchmark's, not proof, and restoration never constructs it.
+- A0-7: committed Browser_Reports are written to `data/benchmark/browser/`, and `data/benchmark/browser/index.json` is the index.
 - Sibling amendments already made: detection reads `data/synthetic/damage-levels.json` (benchmark-owned, validated against the requirement 7.3 field list), and restoration's tune script accepts only the `tuning` and `calibration` roles.
 - Four split roles: `tuning`, `calibration`, `held-out`, sealed `test`.
 - This spec fixes no accuracy, coverage, calibration or improvement threshold. The Threshold_Register starts with every entry `not set`. Experiments E-1 to E-7 record results and never assert a threshold.
@@ -53,8 +56,8 @@ Conventions for every task:
   - [ ] 1.2 Scaffold `src/benchmark`, seeds, helpers and npm scripts
     - Create the `src/benchmark` skeleton from the design's module layout (placeholder `index.ts`, `__tests__/`, `__tests__/support/`, `__tests__/golden/`, `upstream/`).
     - Create `src/benchmark/__tests__/seeds.ts` with `SEED_P1` to `SEED_P25` (`20260700 + n`) and `SEED_GOLDEN = 20260790`. Create `src/benchmark/__tests__/helpers.ts` reusing or mirroring the domain `deepFreeze` and `cloneBefore` helpers.
-    - Pre-register the npm scripts `bench:dataset:quick`, `bench:dataset:full`, `bench:run:quick`, `bench:run:full`, `bench:tuning:export`, `bench:threshold:freeze`, `bench:browser-report`, `bench:experiment`, `bench:golden:update` in `package.json` now so later workers never edit it. Reuse the existing TypeScript, Vitest and fast-check configuration and do not duplicate it.
-    - Files owned: `package.json` (scripts only), `src/benchmark/__tests__/seeds.ts`, `src/benchmark/__tests__/helpers.ts`, folder skeleton.
+    - Do not edit `package.json` or any configuration file (A0-1). The integrator creates `package.json` and all configs at milestone M0 with every script pre-registered: `bench:dataset:quick`, `bench:dataset:full`, `bench:run:quick`, `bench:run:full`, `bench:tuning:export`, `bench:threshold:freeze`, `bench:browser-report`, `bench:experiment`, `bench:golden:update`. This task verifies that `package.json` exists and that each of these nine scripts is present, and reuses the existing TypeScript, Vitest and fast-check configuration. If `package.json` or any script is missing, or a config change is needed, stop and request the change from the integrator. Never add or edit it here.
+    - Files owned: `src/benchmark/__tests__/seeds.ts`, `src/benchmark/__tests__/helpers.ts`, folder skeleton. (`package.json` is owned by the integrator.)
     - _Requirements: 23.6, 28.1_
 
   - [ ] 1.3 Write the import-boundary test
@@ -86,13 +89,13 @@ Conventions for every task:
     - _Requirements: 2.1, 2.7, 4.1, 5.1, 6.1, 6.3, 7.1, 7.3, 7.5, 7.12_
 
   - [ ] 2.4 Define item, manifest and split types
-    - `dataset/manifest.ts` types (`DatasetManifest`, `FamilyManifestEntry`, `ItemManifestEntry`), `dataset/splitAssignment.ts` types (`SplitRole`, `SplitAssignmentConfig`, `Stratum`), `dataset/familyBuilder.ts` types, `dataset/datasetBuilder.ts` types (`DatasetConfig`), and `Item`, `SystemInputRef`, `GroundTruthRef` (disjoint types sharing only the neutral `itemId`).
+    - `dataset/manifest.ts` types (`DatasetManifest`, `FamilyManifestEntry`, `ItemManifestEntry`). For every Item with a rendered card image, `ItemManifestEntry` carries `imageProvenance?: readonly CardImageProvenance[]` (A0-4), one `CardImageProvenance` per rendered damaged card image with fields `cardId`, `generator`, `generatorVersion`, `sourceId` (`${datasetVersion}/${itemId}`), `seed` (integer), `parametersDigest` and `imageDigest`. Both digests are strings in the form `"sha-256:<lowercase hex>"`, the Image_Digest text form detection exposes as `imageDigestText`, and the manifest's own artifact digest list keeps its separate `{algorithm, hex}` record. Items with no image (restoration track) omit `imageProvenance`. Use the design's exact declarations (design.md, `ItemManifestEntry` and `CardImageProvenance`). `dataset/splitAssignment.ts` types (`SplitRole`, `SplitAssignmentConfig`, `Stratum`), `dataset/familyBuilder.ts` types, `dataset/datasetBuilder.ts` types (`DatasetConfig`), and `Item`, `SystemInputRef`, `GroundTruthRef` (disjoint types sharing only the neutral `itemId`).
     - Add a compile-time test that a `GroundTruthRef` is not assignable where a `SystemInputRef` is expected, and that neither carries `familyKey`, `splitRole` or a damage level on the `SystemInputRef` side.
     - Files owned: `src/benchmark/dataset/manifest.ts` (types), `dataset/splitAssignment.ts` (types), `dataset/familyBuilder.ts` (types), `dataset/datasetBuilder.ts` (types), `src/benchmark/__tests__/itemTypes.test.ts`.
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 9.4, 10.1_
 
   - [ ] 2.5 Define evaluation, baseline and policy types
-    - `evaluation/evaluationGroup.ts` (`EvaluationGroup`, `EvaluationGroupName`), `evaluation/bootstrap.ts` types (`BootstrapConfig`), `evaluation/detectionMetrics.ts` types (`DetectionCellOutcome`), `evaluation/restorationMetrics.ts` types, `evaluation/calibrationMetrics.ts` types (`ReliabilityBin`, `ReliabilityData`), `evaluation/baselines.ts` types (`BaselineResult`, `BASELINES` shape of exactly B1, B2, B3), `evaluation/evaluationPolicy.ts` types (`RestorationRunContext`).
+    - `evaluation/evaluationGroup.ts` (`EvaluationGroup`, `EvaluationGroupName`), `evaluation/bootstrap.ts` types (`BootstrapConfig`), `evaluation/detectionMetrics.ts` types (`DetectionCellOutcome`), `evaluation/restorationMetrics.ts` types, `evaluation/calibrationMetrics.ts` types (`ReliabilityBin`, `ReliabilityData`), `evaluation/baselines.ts` types (`BaselineResult`, `BASELINES` shape of exactly B1, B2, B3), `evaluation/evaluationPolicy.ts` types (`RestorationRunContext`, which keeps `deckOrigin: "synthetic"` as its only value and records `syntheticAttestations: ReadonlyMap<string, unknown>` keyed by `cardId`, as in the design). The attestation functions are declared in `adapters/syntheticAttestations.ts` (task 2.9 stub, task 18.6 body), not here.
     - Files owned: `src/benchmark/evaluation/evaluationGroup.ts`, and the type sections of the other `evaluation/*` files listed above.
     - _Requirements: 12.10, 13.1, 14.1, 15.4, 16.1, 17.1_
 
@@ -102,7 +105,7 @@ Conventions for every task:
     - _Requirements: 11.4, 11.5, 18.1, 18.3, 19.1, 19.7_
 
   - [ ] 2.7 Define report types
-    - `report/benchmarkReport.ts` types (`ComponentStamp`, `BenchmarkReport`, `TrackSection`, `FailureExample`), `report/browserReport.ts` types (`BrowserReport`, `BrowserReportIndexEntry`), `report/tables.ts` and `report/failureExamples.ts` signature types. No timestamp, path, personal-data or pixel field in any report type.
+    - `report/benchmarkReport.ts` types (`ComponentStamp`, `BenchmarkReport`, `TrackSection`, `FailureExample`), `report/browserReport.ts` types (`BrowserReport`, `BrowserReportIndexEntry` with fields `id`, `profileId`, `datasetVersion`, `executionProfile`, `reportDigest` and `trackStatuses`, as in the design), `report/tables.ts` and `report/failureExamples.ts` signature types. No timestamp, path, personal-data or pixel field in any report type.
     - Files owned: `src/benchmark/report/benchmarkReport.ts` (types), `report/browserReport.ts` (types), `report/tables.ts` (types), `report/failureExamples.ts` (types).
     - _Requirements: 20.1, 20.2, 20.8, 21.5, 22.1_
 
@@ -114,7 +117,7 @@ Conventions for every task:
 
   - [ ] 2.9 Declare signature stubs for every remaining module
     - In each file below, export the final function signatures from the design with TSDoc listing the `BenchmarkError` codes. Bodies call a temporary `notImplemented()` helper in `src/benchmark/_stub.ts`.
-    - Files: `seed.ts`, `canonicalJson.ts`, `families/{deckBuilders,labelCheck,withinCardPartner}.ts`, `render/cardRenderer.ts`, `damage/{damageLevelFile,cellDamageModels,imageDamageModels}.ts`, `dataset/{manifest,familyBuilder,splitAssignment,datasetBuilder,leakageGuard}.ts`, `evaluation/*`, `tracks/*`, `runner/*`, `threshold/*`, `report/*`, `userStudy/*`, `adapters/{restorationTuneExport,calibrationExport,damageLevelForDetection}.ts`.
+    - Files: `seed.ts`, `canonicalJson.ts`, `families/{deckBuilders,labelCheck,withinCardPartner}.ts`, `render/cardRenderer.ts`, `damage/{damageLevelFile,cellDamageModels,imageDamageModels}.ts`, `dataset/{manifest,familyBuilder,splitAssignment,datasetBuilder,leakageGuard}.ts`, `evaluation/*`, `tracks/*`, `runner/*`, `threshold/*`, `report/*`, `userStudy/*`, `adapters/{restorationTuneExport,calibrationExport,damageLevelForDetection,syntheticAttestations}.ts` (the last with the design signatures `buildSyntheticAttestations(manifest: DatasetManifest, itemId: string)` and `checkAttestationsAgainstDetection(attestations, detectedDigestTextByCard)`).
     - Stubs carry the final contracts: `buildProposalView` and the baselines take only damaged data, `evaluation/*` loads Ground_Truth_Artifacts only inside comparison functions, `B0` is declared only under `__tests__`.
     - `_stub.ts` is temporary. Task 27.1 asserts that nothing imports it and deletes it.
     - _Requirements: 8.4, 8.5, 16.5, 27.1_
@@ -281,7 +284,7 @@ Conventions for every task:
 - [ ] 10. Clean image renderer and image-level damage (Crew-delegable, Group B)
   - Depends on: tasks 3, 4.1. Files owned: `render/cardRenderer.ts`, `damage/imageDamageModels.ts`, `__tests__/generators/images.ts`, and the test files below.
   - [ ] 10.1 Implement the clean card renderer
-    - `renderCleanCardImage(deck, cardId, profile, params, seed)` returns bytes (PNG, JPEG or WebP), the true Card_Quadrilateral, `RenderParameters` including `rendererVersion`, and a SHA-256 digest. Seeded, byte-identical for equal inputs and renderer version, no `Math.random`. Larger than detection's Intake_Limits defaults returns `RENDER_OUT_OF_LIMITS` naming the limit and writes nothing. Independent of `src/vision/__tests__` (no import either way). Parameter names and units match `docs/benchmark-metrics.md`.
+    - `renderCleanCardImage(deck, cardId, profile, params, seed)` returns bytes (PNG, JPEG or WebP), the true Card_Quadrilateral, `RenderParameters` including `rendererVersion`, and a SHA-256 digest. Seeded, byte-identical for equal inputs and renderer version, no `Math.random`. The returned image digest is exposed in the string form `"sha-256:<lowercase hex>"` (computed over the image bytes, A0-4), alongside any `{algorithm, hex}` record. Larger than detection's Intake_Limits defaults returns `RENDER_OUT_OF_LIMITS` naming the limit and writes nothing. Independent of `src/vision/__tests__` (no import either way). Parameter names and units match `docs/benchmark-metrics.md`.
     - Files owned: `src/benchmark/render/cardRenderer.ts`.
     - _Requirements: 4.1, 4.2, 4.3, 4.5, 4.6, 4.7, 4.8_
 
@@ -379,6 +382,7 @@ Conventions for every task:
 
   - [ ] 13.2 Implement the evaluation policy and run context
     - `buildProposalView(deck, hypothesesByCell)` reads effective values and rank-1 Hypothesis values only and never calls a review, accept, select, edit or approval function. `RestorationRunContext` fixes `deckOrigin: "synthetic"` and `syntheticEvaluationContext: true`, records the four labelled conditions (priors disabled, repeat only, symmetry only, both), prior measurement references (scope `synthetic`, from `tuning` or `calibration` of the same Dataset_Version), the complete `RestorationConfig` and `DetectionParameters` used, tuned-constants file identifiers and versions, and the restoration seed (documented as not used to choose among Hypotheses). A condition without its required measurement or record is `not-evaluated` with the reason, never substituted.
+    - Attestations (A0-4): the run context only records the `syntheticAttestations` map it is given (built by `adapters/syntheticAttestations.ts`, task 18.6) and states in the report that an attestation is a declaration by the benchmark runner, not proof. It builds nothing itself. The run context always uses `deckOrigin: "synthetic"`, and no code path passes `deckOrigin: "real"` for benchmark data.
     - Files owned: `src/benchmark/evaluation/evaluationPolicy.ts`.
     - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7_
 
@@ -481,7 +485,8 @@ Conventions for every task:
     - _Requirements: 21.5, 21.6, 21.7_
 
   - [ ] 17.3 Implement the Browser_Report, the index and the browser-safe reader
-    - `buildBrowserReport(report, firstN)` omits per-cell detail, keeps every Metric_Value with interval and counts, Reliability_Data, the first N failure examples, the fixed honesty statements (requirement 1.5, 15.9, 11.6 texts), the profile `unverified` markers, and credits Rodas Lorente et al. (2025) and the Garín5 dataset. Over `BROWSER_REPORT_MAX_BYTES` returns `REPORT_TOO_LARGE` naming size and limit and writes nothing. `buildBrowserReportIndex` lists dataset identity, profile, digest and track statuses. The reader is browser-safe and loads by a plain static request.
+    - `buildBrowserReport(report, firstN)` omits per-cell detail, keeps every Metric_Value with interval and counts, Reliability_Data, the first N failure examples, the fixed honesty statements (requirement 1.5, 15.9, 11.6 texts), the profile `unverified` markers, and credits Rodas Lorente et al. (2025) and the Garín5 dataset. Over `BROWSER_REPORT_MAX_BYTES` returns `REPORT_TOO_LARGE` naming size and limit and writes nothing. `buildBrowserReportIndex` lists, per report, `id` (also the file stem), `profileId`, `datasetVersion`, `executionProfile`, `reportDigest` and `trackStatuses`. The reader is browser-safe and loads by a plain static request.
+    - Location (A0-7): Browser_Reports are written to `data/benchmark/browser/`, one file per report, and `data/benchmark/browser/index.json` (built with `buildBrowserReportIndex`) is maintained alongside them. The index lists every file in that folder and the builder refuses to list a report that is absent.
     - Files owned: `src/benchmark/report/browserReport.ts`.
     - _Requirements: 22.1, 22.2, 22.3, 22.4, 22.5, 26.7_
 
@@ -503,14 +508,14 @@ Conventions for every task:
     - _Requirements: 21.2, 22.2, 22.5_
 
 - [ ] 18. Splits, families, manifest and leakage guard (Crew-delegable, Group C)
-  - Depends on: tasks 3, 4, 7. Files owned: `dataset/familyBuilder.ts`, `dataset/splitAssignment.ts`, `dataset/manifest.ts`, `dataset/leakageGuard.ts`, `__tests__/generators/dataset.ts`, and the test files below.
+  - Depends on: tasks 3, 4, 7. Files owned: `dataset/familyBuilder.ts`, `dataset/splitAssignment.ts`, `dataset/manifest.ts`, `dataset/leakageGuard.ts`, `adapters/syntheticAttestations.ts`, `__tests__/generators/dataset.ts`, and the test files below.
   - [ ] 18.1 Implement family construction and split assignment
     - `familyBuilder.ts`: Deck_Family construction (Family_Key from Pattern_Family, parameters id, base-deck seed and profile id, damage seed excluded), per-item seeds via `deriveSeed`. `splitAssignment.ts`: `assignSplitRoles` stratified by Pattern_Family and Profile, deterministic (families ordered by key string, never generation order), `SPLIT_STRATUM_TOO_SMALL` naming the stratum below the minimum per role, `assertNoCrossSplitFamily`, and `readRole(role, caller, registerState, explicitTestOptIn)` returning `SPLIT_ROLE_FORBIDDEN` before any read (tuning and calibration callers never read `held-out` or `test`; the default runner and quick profile never read `test`; the final runner reads `test` only with the explicit option and a frozen register).
     - Files owned: `src/benchmark/dataset/familyBuilder.ts`, `src/benchmark/dataset/splitAssignment.ts`.
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 10.10, 10.11_
 
   - [ ] 18.2 Implement the manifest, digest verification and reproduction check
-    - `buildDatasetManifest` (canonical, byte-identical for identical inputs, records versions, root seed, every derived seed, parameter sets, profile id, per-artifact relative path, byte length, digest with algorithm), `verifyManifestArtifacts` (`DATASET_DIGEST_MISMATCH` naming the first mismatch, run before any evaluation), `reproduceAndCompare` (`DATASET_NOT_REPRODUCIBLE` naming the first differing artifact). Wall-clock values and hardware go only to the runtime file.
+    - `buildDatasetManifest` (canonical, byte-identical for identical inputs, records versions, root seed, every derived seed, parameter sets, profile id, per-artifact relative path, byte length, digest with algorithm, and, for every Item with rendered card images, `imageProvenance` with one `CardImageProvenance` per card (`cardId`, `generator`, `generatorVersion`, `sourceId`, `seed`, `parametersDigest`, `imageDigest`, the two digests written `"sha-256:<lowercase hex>"` over the damaged image bytes passed to `detect()`, A0-4); Items without images omit `imageProvenance`), `verifyManifestArtifacts` (`DATASET_DIGEST_MISMATCH` naming the first mismatch, run before any evaluation), `reproduceAndCompare` (`DATASET_NOT_REPRODUCIBLE` naming the first differing artifact). Wall-clock values and hardware go only to the runtime file.
     - Files owned: `src/benchmark/dataset/manifest.ts`.
     - _Requirements: 2.7, 3.3, 4.5, 9.1, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10_
 
@@ -529,6 +534,18 @@ Conventions for every task:
     - Adding a family to one stratum does not reassign another, `SPLIT_STRATUM_TOO_SMALL` names the stratum, `readRole` refusals for every caller and role combination (including the refused `test` read example), a tampered artifact gives `DATASET_DIGEST_MISMATCH`, a differing regeneration gives `DATASET_NOT_REPRODUCIBLE`, a System_Input file seeded with a Family_Key gives `LEAKAGE_DETECTED`.
     - Files owned: `src/benchmark/__tests__/manifestSplitsLeakage.test.ts`.
     - _Requirements: 8.9, 9.7, 9.8, 10.4, 10.11_
+
+  - [ ] 18.6 Implement the synthetic attestation adapter (A0-4)
+    - `buildSyntheticAttestations(manifest: DatasetManifest, itemId: string): BenchmarkResult<ReadonlyMap<string, unknown>>`: pure, reads only the manifest (never a Ground_Truth_Artifact), returns one entry per `cardId` in the Item's `imageProvenance`, mapping field for field (`generator`, `generatorVersion`, `sourceId`, `seed`, `parametersDigest`, `imageDigest`) to restoration's `SyntheticImageAttestation` shape with no translation. An unknown `itemId`, or an Item with no `imageProvenance`, returns an error and never a fabricated or empty-by-accident attestation set.
+    - `checkAttestationsAgainstDetection(attestations, detectedDigestTextByCard): BenchmarkResult<void>`: returns `DATASET_DIGEST_MISMATCH` naming the `cardId` when a card's manifest `imageDigest` differs from the digest text detection reported (`CardDetectionRecord.imageDigestText`), or when a card is missing on either side. No new error code is introduced.
+    - Use the design's signatures exactly. Declare restoration's attestation shape structurally in `upstream/ports.ts` (frozen, task 2.8) and do not edit that file.
+    - Files owned: `src/benchmark/adapters/syntheticAttestations.ts`.
+    - _Requirements: 4.5, 9.4, 17.2, 25.1_
+
+  - [ ]* 18.7 Write attestation adapter unit tests
+    - Field-for-field mapping from a manifest fixture, one entry per card, digests in `"sha-256:<lowercase hex>"` form, unknown `itemId` and image-less Item return errors, a changed manifest `imageDigest` or changed detected digest text returns `DATASET_DIGEST_MISMATCH` naming the `cardId`, a card missing from either map returns the same code, the adapter reads no ground-truth path (called with a manifest only).
+    - Files owned: `src/benchmark/__tests__/syntheticAttestations.test.ts`.
+    - _Requirements: 4.5, 17.2, 25.1_
 
 - [ ] 19. Dataset builder and tuning export (Crew-delegable, Group C)
   - Depends on: tasks 6.1, 7, 8, 9, 10, 12.3, 18. Files owned: `dataset/datasetBuilder.ts` (bodies), `adapters/restorationTuneExport.ts`, and the test files below.
@@ -570,19 +587,20 @@ Conventions for every task:
     - _Requirements: 1.1, 1.6, 8.4, 8.5_
 
   - [ ] 21.2 Implement the Restoration_Track
-    - For each item and each of the four conditions build a `RestorationInput` with the damaged Deck, `detectionEvidence` undefined, the condition's `RestorationConfig`, `deckOrigin: "synthetic"` and `syntheticEvaluationContext: true`, and call `runInference` through the restoration index. Build the Proposal_View with `buildProposalView`. Run B1, B2, B3 on the same inputs and Items, and the abstain-all fixture is never run here.
+    - For each item and each of the four conditions build a `RestorationInput` with the damaged Deck, `detectionEvidence` undefined, the condition's `RestorationConfig`, `deckOrigin: "synthetic"` and `syntheticEvaluationContext: true` (never `"real"`), and call `runInference` through the restoration index. Restoration-only decks have no image digest, so they carry no `syntheticAttestations`. Build the Proposal_View with `buildProposalView`. Run B1, B2, B3 on the same inputs and Items, and the abstain-all fixture is never run here.
     - Files owned: `src/benchmark/tracks/restorationTrack.ts`.
     - _Requirements: 1.2, 1.6, 16.4, 17.1, 17.2, 17.4_
 
   - [ ] 21.3 Implement the End_To_End_Track
-    - For each card image: `detect`, then `mapDetection`, assemble the mapped cards into one Deck with the domain `createDeck` (never hand-built), build `DetectionEvidenceInput` from each `CardDetectionRecord` structurally (no cast, no `src/vision` import on the restoration call path), call `runInference`, build the Proposal_View, and report metrics also split by detection Condition. A track whose required input is absent is recorded `not-evaluated` with a reason.
+    - For each card image: `detect`, then `mapDetection`, assemble the mapped cards into one Deck with the domain `createDeck` (never hand-built), build `DetectionEvidenceInput` from each `CardDetectionRecord` structurally (no cast, no `src/vision` import on the restoration call path), build the per-card `syntheticAttestations` with `buildSyntheticAttestations(manifest, itemId)` (A0-4), then call `checkAttestationsAgainstDetection(attestations, detectedDigestTextByCard)` with each `CardDetectionRecord.imageDigestText` and stop with the returned `DATASET_DIGEST_MISMATCH` (naming the `cardId`) before restoration runs, record the attestations in `RestorationRunContext`, pass them in the `RestorationInput` with `deckOrigin: "synthetic"` (never `"real"`), call `runInference`, build the Proposal_View, and report metrics also split by detection Condition. A track whose required input is absent is recorded `not-evaluated` with a reason.
     - Files owned: `src/benchmark/tracks/endToEndTrack.ts`.
     - _Requirements: 1.3, 1.6, 1.8, 14.10_
 
   - [ ]* 21.4 Write track wiring tests
     - With the fake upstream doubles: `runDetectionTrack` calls `detect` with no `GroundTruthRef`, `runRestorationTrack` passes no detection evidence, the end-to-end track builds the Deck through `createDeck`, a missing input gives `not-evaluated` with a reason, tracks run independently of each other.
+    - Attestation example test (A0-4): an end-to-end run on an image-carrying deck with `deckOrigin: "synthetic"` and no `syntheticAttestations` fails with restoration's `INVALID_CONFIGURATION`, and the same run with attestations built by `buildSyntheticAttestations(manifest, itemId)` succeeds. Add the changed-digest case: altering one card's manifest `imageDigest` (or the digest text detection reports) makes `checkAttestationsAgainstDetection` return `DATASET_DIGEST_MISMATCH` naming that `cardId`, and `runInference` is never called. Add the restoration-track case: `runRestorationTrack` passes no `syntheticAttestations` (empty or absent) with `detectionEvidence` undefined and never builds an attestation. Run it against the real restoration export, and with the fake double (which models the same check) while the export is missing, skipped with a named reason if neither is usable. Also assert that no benchmark call site passes `deckOrigin: "real"`.
     - Files owned: `src/benchmark/__tests__/tracks.test.ts`.
-    - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.8_
+    - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.8, 17.2_
 
 - [ ] 22. Benchmark runner (single worker, not split, Group D)
   - Depends on: tasks 20, 21.1, 21.2, 21.3. Files owned: `runner/runtimeFile.ts`, `runner/benchmarkRunner.ts`, and the test files below.
@@ -637,7 +655,7 @@ Conventions for every task:
     - _Requirements: 10.9, 21.1, 23.6, 23.7_
 
   - [ ] 24.2 Implement the export, freeze and browser-report scripts
-    - `benchmark-export-tuning.ts` (tuning and calibration roles only), `benchmark-freeze-thresholds.ts` (one-way `draft` to `frozen`, requires an explicit confirmation flag), `benchmark-browser-report.ts` (regenerates the committed quick-profile Browser_Report and index under `data/benchmark`, the only way that file is updated).
+    - `benchmark-export-tuning.ts` (tuning and calibration roles only), `benchmark-freeze-thresholds.ts` (one-way `draft` to `frozen`, requires an explicit confirmation flag), `benchmark-browser-report.ts` (regenerates the committed quick-profile Browser_Report under `data/benchmark/browser/` and rewrites `data/benchmark/browser/index.json` (A0-7), the only way those files are updated).
     - Files owned: `scripts/benchmark-export-tuning.ts`, `scripts/benchmark-freeze-thresholds.ts`, `scripts/benchmark-browser-report.ts`.
     - _Requirements: 10.10, 18.6, 21.3, 22.3, 22.6_
 
@@ -727,7 +745,7 @@ Conventions for every task:
   - Ensure all tests pass, ask the user if questions arise.
   - Items awaiting user confirmation or an owner decision (none of these is settled by this plan):
     - **Upstream availability:** which of the domain, detection and restoration exports exist when execution starts (task 1.1 result), and therefore which `it.skip` tests (renderer conformance, within-card partner conformance, shared-metric P14, calibration-record validation) remain skipped.
-    - **Design Q5 to Q10 (still open in requirements.md):** Q5 restoration track without image evidence (recommended as written), Q6 whether a user study will be run before submission (default `not-conducted`), Q8 generated-data folder names (`data/generated` and `data/benchmark` recommended), Q9 whether the UI only displays committed Browser_Reports (recommended), Q10 Garín versus small profiles split between `quick` and `full` (recommended small for `quick`, Garín for `full` and the bundled journey).
+    - **Design Q5 to Q10 (still open in requirements.md):** Q5 restoration track without image evidence (recommended as written), Q6 whether a user study will be run before submission (default `not-conducted`), Q8 generated-data folder name (`data/generated`; the Browser_Report location `data/benchmark/browser/` is settled), Q9 whether the UI only displays committed Browser_Reports (recommended), Q10 Garín versus small profiles split between `quick` and `full` (recommended small for `quick`, Garín for `full` and the bundled journey).
     - **Initial values to confirm by experiments:** every Damage_Level_File value including `occlusionCoverFraction` 0.9 and the per-level `occlusionCoverage` (E-2), the Execution_Profile bounds and budgets (E-7), the E-1 renderer tolerance, `MIN_LABELLED_CELLS_FOR_RATE`, and the stratum minima. None is a threshold.
     - **Seed block:** this plan uses `20260701` to `20260725` as the requirement and design state. Confirm it does not collide with another spec's block.
     - **Threshold freeze:** when to run `bench:threshold:freeze`, which is required before any `test`-role read or user-comparison task draw.
@@ -758,7 +776,7 @@ Conventions for every task:
 | 15 | B | 3, 4.2, 5.2 | `userStudy/*`, `tracks/realPhotographTrack.ts` |
 | 16 | B | 3, 4.2, 5.1 | `report/benchmarkReport.ts` |
 | 17 | B | 3, 16.1 | `report/tables.ts`, `report/failureExamples.ts`, `report/browserReport.ts`, `generators/report.ts` |
-| 18 | C | 3, 4, 7 | `dataset/{familyBuilder,splitAssignment,manifest,leakageGuard}.ts`, `generators/dataset.ts` |
+| 18 | C | 3, 4, 7 | `dataset/{familyBuilder,splitAssignment,manifest,leakageGuard}.ts`, `adapters/syntheticAttestations.ts`, `generators/dataset.ts` |
 | 19 | C | 6.1, 7, 8, 9, 10, 12.3, 18 | `dataset/datasetBuilder.ts`, `adapters/restorationTuneExport.ts` |
 | 21 | D, single worker | 20 | `tracks/{detectionTrack,restorationTrack,endToEndTrack}.ts` |
 | 22 | D, single worker | 20, 21 | `runner/runtimeFile.ts`, `runner/benchmarkRunner.ts` |
@@ -767,7 +785,7 @@ Conventions for every task:
 | 26.1 to 26.4 | E | 19, 22 | goldens, determinism and round-trip property tests, `scripts/benchmark-golden-update.ts` |
 | 27 | E | all | `guards.test.ts`, `integration.test.ts`, `errorCodes.test.ts` |
 
-- Each Crew task owns its tests and edits no file owned by another task. Shared generator files are split by owner so no two workers touch one file. `package.json` is edited only in task 1.2.
+- Each Crew task owns its tests and edits no file owned by another task. Shared generator files are split by owner so no two workers touch one file. No task edits `package.json` or any configuration file (A0-1). The integrator creates them at milestone M0 with all nine `bench:*` scripts pre-registered, and a worker who needs a change requests it from the integrator.
 - Property coverage: P1 task 26.1; P2 9.2; P3 9.3; P4 10.3; P5 10.4; P6 8.3; P7 7.4; P8 19.3; P9 19.4; P10 18.4; P11 12.4; P12 12.5; P13 5.3; P14 11.2; P15 11.3; P16 13.4; P17 13.5; P18 13.6; P19 14.3; P20 14.4; P21 26.2; P22 17.4; P23 17.5; P24 22.3; P25 6.3. Seeds are `20260700 + n`.
 - Requirement 28 items that are not properties: 28.2 and 28.3 are conventions, 28.15 is the golden tests (26.3, 26.4), 28.16 is covered by example tests in 14.5, 15.3 and 22.4, and 28.17 is the regression file (26.5).
 - The benchmark tasks depend on the domain, detection and restoration libraries. Until a needed export exists, code uses the structural ports in `upstream/ports.ts` and tests use `fakeUpstream.ts`, and tests that need the real library are `it.skip` with a named reason. The goldens and the determinism property use the doubles so they stay stable when upstream implementations change.
@@ -795,8 +813,8 @@ Conventions for every task:
     { "id": 12, "tasks": ["4.3", "5.2", "6.3", "6.4", "7.1", "7.2", "7.3", "8.1", "9.1", "10.1", "11.1", "12.1", "12.2", "13.1", "14.1", "15.1", "16.1"] },
     { "id": 13, "tasks": ["5.3", "5.4", "7.4", "7.5", "7.6", "8.2", "8.3", "9.2", "9.3", "9.4", "10.2", "10.5", "11.2", "11.3", "11.4", "12.3", "12.4", "12.5", "12.6", "13.2", "13.3", "13.4", "13.5", "13.7", "14.2", "14.3", "14.4", "15.2", "16.2", "17.1", "17.2", "17.3", "18.1"] },
     { "id": 14, "tasks": ["8.4", "10.3", "10.4", "10.6", "13.6", "14.5", "15.3", "17.4", "17.5", "17.6", "18.2", "18.3"] },
-    { "id": 15, "tasks": ["18.4", "18.5", "19.1", "19.2"] },
-    { "id": 16, "tasks": ["19.3", "19.4", "19.5"] },
+    { "id": 15, "tasks": ["18.4", "18.5", "18.6", "19.1", "19.2"] },
+    { "id": 16, "tasks": ["18.7", "19.3", "19.4", "19.5"] },
     { "id": 17, "tasks": ["20"] },
     { "id": 18, "tasks": ["21.1", "21.2", "21.3"] },
     { "id": 19, "tasks": ["21.4", "22.1"] },

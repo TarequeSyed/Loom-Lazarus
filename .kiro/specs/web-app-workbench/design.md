@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document designs the Workbench: the browser application in `src/ui`, with worker entry points in `src/workers`, that turns the domain, detection and restoration engines into one journey (photograph or bundled sample, detection, evidence-based restoration, human approval, deterministic virtual loom, export), plus a read-only Benchmark Lab and a build-time-generated Kiro Trail. It implements `web-app-workbench/requirements.md` (requirements 1-30), approved with Q4 and Q6 resolved.
+This document designs the Workbench: the browser application in `src/ui`, with worker entry points in `src/workers`, that turns the domain, detection and restoration engines into one journey (photograph or bundled sample, detection, evidence-based restoration, human approval, deterministic virtual loom, export), plus a read-only Benchmark Lab and a build-time-generated Kiro Trail. It implements `web-app-workbench/requirements.md` (requirements 1-31), approved with Q4 and Q6 resolved and amended for plan batch A0 (see "Amendment record" at the end of this document). The user also approved "Benchmark Lab P1, essential results in P0": the Results_Summary is P0, the full Benchmark Lab stays P1.
 
 The Workbench holds no engine logic and no second copy of the truth. The single source of truth is the domain `Deck`, the restoration `RestorationRecord`, and the detection `CorrectionLog`. Every screen derives its view from these three records through the sibling public APIs; every user action that changes them calls exactly one sibling function and replaces the displayed state with what that function returned.
 
@@ -65,9 +65,18 @@ The approved `requirements.md` for this spec names dependencies descriptively (w
 | `ComponentStamp` | `ComponentStamp` | benchmark `report/benchmarkReport.ts` | |
 | `unverifiedMarkers` | `BrowserReport.unverifiedMarkers` | benchmark `report/browserReport.ts` | |
 | Benchmark_Error_Code registry | `BENCHMARK_ERROR_CODES`, `BENCHMARK_ERROR_MESSAGES` | benchmark `result.ts` | |
-| committed quick-profile Browser_Report | the file `data/benchmark/<dataset>-quick.browserreport.json` written by `scripts/benchmark-browser-report.ts` | benchmark `report/browserReport.ts` output | path confirmed under "Amendments needed", item 6 |
+| committed quick-profile Browser_Report and its index | `data/benchmark/browser/index.json` and the quick-profile report file beside it, written by the benchmark browser-report script (plan item A0-7, now fixed) | benchmark `report/browserReport.ts` output | the Workbench reads only this folder (requirement 18.21) |
+| `Synthetic_Image_Attestation` | `SyntheticImageAttestation` (`generator`, `generatorVersion`, `sourceId`, `seed`, `parametersDigest`, `imageDigest`) | restoration `types` (restoration design "Synthetic image attestation") | one per card with image evidence, in `RestorationInput.syntheticAttestations` keyed by `cardId` |
+| `deckOrigin`, `syntheticAttestations` inputs | `RestorationConfig.deckOrigin` (`"real" \| "synthetic"`), `RestorationInput.syntheticAttestations` (`ReadonlyMap<string, SyntheticImageAttestation>`) | restoration `types` | the Workbench supplies both from the Demo_Bundle check of requirement 31 |
+| `Synthetic_Deck_Notice` | `SYNTHETIC_DECK_NOTICE` | restoration `gating/attestation.ts` | shown as supplied, never authored by the Workbench |
+| Prior toggle (attested synthetic deck) | `RestorationConfig.enabledPriors` (`StructuralPriorKind` = `"repeat" \| "symmetry"`) plus `evaluatePriorGate` | restoration `config`, `gating/priorGate.ts` | a configuration toggle, no enablement entry |
+| Prior enablement (real deck) | `applyReviewAction` kinds `enable-synthetic-prior` and `disable-synthetic-prior` (backed by `enableSyntheticPrior`, `disableSyntheticPrior`) | restoration `review/service.ts`, `gating/priorGate.ts` | note of 1 to 1,000 characters required |
+| card-insert operation | `insertCard(deck, card, at, actionId)` | domain `deck/structure` (`Result<Deck>`) | used once to put the detected card into the Context_Deck at `damagedCardIndex` |
+| `SampleMeta` and its validator | `SampleMeta` (`format: "loom-lazarus-sample-meta"`, `schemaVersion: 1`, `generator`, `generatorVersion`, `sourceId`, `seed`, `parametersDigest`, `imageDigest`, `orientation`, `profileId`, `synthetic: true`) and the detection `SampleMeta` validator | vision public index | the Workbench validates its Demo_Bundle copy through this validator, not its own |
+| Image digest text form | `CardDetectionRecord.imageDigestText` (`"sha-256:<lowercase hex>"`) | vision `mapping/*` | compared by string with the manifest and `SampleMeta` digests |
+| Image digest function | `sha256Hex` (async, `crypto.subtle`), the function that produces Image_Digest | vision `hash.ts` | digests the bundled image bytes in the browser. Whether the vision public index re-exports it is open: see "Amendments needed", item 6 |
 
-No sibling export this design needs is missing; every gap found is a *metadata* gap (a marker the UI wants to show but the domain does not yet expose), listed under "Amendments needed in sibling specs", not a missing function.
+No sibling function this design needs is missing (the one open point is whether the vision index re-exports `sha256Hex`); every other gap found is a *metadata* gap (a marker the UI wants to show but the domain does not yet expose), listed under "Amendments needed in sibling specs", not a missing function.
 
 ## Architecture
 
@@ -103,11 +112,18 @@ src/ui/
     boundaryRegistry.ts           WORKBENCH_ERROR_CODES tuple + the Boundary-to-Owner-Validator map (used by
                                    the "no second validator" lint test)
   demoBundle/
-    demoBundleTypes.ts            DemoBundleManifest type (image ref, recorded Orientation, recorded
-                                   LoomConfiguration, precomputed DetectionResult ref, precomputed approved
-                                   Deck ref)
+    demoBundleTypes.ts            DemoBundleManifest type (image ref, imageDigest, damagedCardIndex, recorded
+                                   Orientation, recorded LoomConfiguration, context-deck ref, SampleMeta ref,
+                                   precomputed DetectionResult ref, precomputed approved Deck ref, placeholder flag)
     loadDemoBundle.ts             loads + validates every Demo_Bundle asset through ITS OWNING importer
-                                   (importDetectionResult, importDeckJson, ...), plus the manifest validator
+                                   (importDetectionResult, importDeckJson, SampleMeta validator, ...), plus the
+                                   manifest validator
+    attestation.ts                checkBundledImageDigest (sha-256 of the bytes vs manifest vs SampleMeta) and
+                                   buildBundledAttestations (SampleMeta -> syntheticAttestations, damaged card only)
+    deckOrigin.ts                 decideDeckOrigin: the ONLY module that produces a deckOrigin and an attestation
+                                   map for a restoration run (requirement 31; see "Deck origin and attestation")
+    contextDeck.ts                insertDetectedCard: the one call of the domain insertCard that builds the deck
+                                   handed to restoration (requirement 31.8)
   trail/
     trailTypes.ts                 TrailData, TrailEntry (mirrors the build script's output schema)
     loadTrailData.ts              fetch + validate the generated static asset
@@ -115,11 +131,13 @@ src/ui/
     scan/            ScanScreen.tsx, viewModel.ts, components/ (CardViewer2D, OverlayLayer, AlignmentEditor,
                       QualityFindingsList, UploadDropzone)
     studio/          StudioScreen.tsx, viewModel.ts, components/ (CardViewer, RegionInspector,
-                      AlternativesPanel, CorrectionToolbar, ApprovalPanel, SideBySide, OverrideList)
+                      AlternativesPanel, CorrectionToolbar, ApprovalPanel, PriorGatePanel [P0],
+                      DeckContextNotice [P0], SideBySide, OverrideList)
     loom/            LoomScreen.tsx, viewModel.ts, components/ (LoomStage, PlaybackControls,
                       WeaversNotesPanel, HookLiftPanel)
-    lab/             LabScreen.tsx, viewModel.ts, components/ (ReportPicker, MetricTable,
-                      ReliabilityDiagram, BaselineComparison, FailureExampleList, ThresholdTable)
+    lab/             LabScreen.tsx, viewModel.ts, components/ (ResultsSummary [P0], HonestyStatements [P0],
+                      ReportPicker, MetricTable, ReliabilityDiagram, BaselineComparison,
+                      FailureExampleList, ThresholdTable)
     trail/           TrailScreen.tsx, viewModel.ts, components/ (TrailTimeline, CreditsPanel, AboutPanel)
     start/           StartScreen.tsx (the first-run view of requirement 4), viewModel.ts
   shared/
@@ -128,7 +146,9 @@ src/ui/
                       requiredVerifiedFields.ts (the eleven-entry table of requirement 14.2)
     glossary/        GlossaryTooltip.tsx, GlossaryPanel.tsx, glossaryTerms.ts (requirement 19.1 term list)
     guidance/        FirstRunPanel.tsx, HelpControl.tsx
-    status/          StatusBanner.tsx, ErrorBoundary.tsx, ScreenState.tsx (loading/empty/error/incomplete/needs-review)
+    status/          StatusBanner.tsx, ErrorBoundary.tsx, ScreenState.tsx (loading/empty/error/incomplete/needs-review),
+                      SimulatedDemoBadge.tsx [P0] (the "Simulated demo card" badge with the Deck_Origin),
+                      ContextCardLabel.tsx [P0] ("Simulated intact cards (synthetic)")
     a11y/            SkipLink.tsx, LiveRegion.tsx, FocusTrap.tsx, useReducedMotion.ts, useFocusAnnounce.ts
     tokens/          colour.ts, type.ts, space.ts, motion.ts, motif.ts (generated from the Design Tokens
                       section; a sync test compares them against this document, see Testing Strategy)
@@ -144,15 +164,19 @@ src/workers/
 
 scripts/
   build-trail.ts                   converts docs/KIRO_TRAIL.md -> data/generated/trail-data.json at build time
+  build-demo-bundle.ts             copies the detection sample into data/demo, builds the manifest and the
+                                    context deck; renders no image (requirement 31.11)
 
 data/
-  demo/                            Demo_Bundle assets (image, recorded config, precomputed result/deck), README
-  benchmark/                       (owned by the benchmark spec) committed quick-profile BrowserReport(s)
+  samples/                         (owned by detection) card-synthetic-sample.png and sample.meta.json
+  demo/                            Demo_Bundle assets (see "Demo Bundle"), README with source and licence
+  benchmark/browser/               (owned by the benchmark spec) index.json and the committed quick-profile
+                                    BrowserReport(s); the only report location the Workbench reads
 ```
 
 ### Dependency rule and import-boundary test
 
-- `src/ui` and `src/workers` import `src/domain`, `src/vision` and `src/restore` only through their `index.ts`, and `src/benchmark` only through `report/browserReport.ts` (confirmed Node-free by that module's own boundary test) or the package's public index if the committed-report path resolves there instead (see "Amendments needed", item 6, for the one open naming confirmation).
+- `src/ui` and `src/workers` import `src/domain`, `src/vision` and `src/restore` only through their `index.ts`, and `src/benchmark` only through `report/browserReport.ts` (confirmed Node-free by that module's own boundary test). `src/workers` may import the public indexes of `src/vision`, `src/restore` and `src/domain` (plan item A0-2, in line with `structure.md`), so `restoration.worker.ts` importing `src/restore` is allowed.
 - No file outside `src/ui`/`src/workers` imports from `src/ui` or `src/workers` (the Workbench is a leaf; nothing depends on it).
 - `src/ui/__tests__/boundary.test.ts`, using the TypeScript compiler API exactly as the four sibling boundary tests do, fails on: an import specifier in `src/ui`/`src/workers` resolving to a non-index module of `src/domain`/`src/vision`/`src/restore`, or to any module of `src/benchmark` outside the browser-safe reader path; any file in `src/domain`, `src/vision`, `src/restore`, `src/benchmark` importing `src/ui` or `src/workers`; a Node-only module (`fs`, `path`, Node's `crypto`) imported by any file reachable from `src/ui`'s own render path (scripts are exempt); and a module in `src/ui` that re-implements a sibling computation (checked by an explicit deny-list of forbidden local function *names* that duplicate sibling concepts -- `computeReadOrder`, `computeConfidence`, `computeAccuracy` and similar -- maintained beside the test, per requirement 1.9).
 - A second test, `src/ui/__tests__/validatorOwnership.test.ts`, scans `src/ui` for `JSON.parse` call sites and flags any that is not immediately followed by a call to one of the Owner_Validators listed in `boundaryRegistry.ts` (requirement 30.6).
@@ -250,6 +274,8 @@ export function createRestorationWorkerHost(factory: WorkerFactory): Restoration
 
 `restoration.worker.ts` imports only `src/restore`'s public index and calls `runInference` inside the `run` message handler; because `runInference` has no internal progress checkpoints exposed by its design, the host reports two progress events only (`0` on start, `1` on completion) rather than inventing granularity the engine does not provide -- this is recorded under "Amendments needed" as something a later restoration minor version could improve, not something this design fabricates. Cancellation of a restoration run is best-effort: the worker is terminated and recreated (restoration's `runInference` is a pure computation with no partial side effects to undo, so terminating it mid-flight leaves no artifact to clean up, unlike detection's checkpointed cancellation). The loom `Interpreter` (`step`, `seek`, `runToEnd`) is synchronous pure arithmetic over at most `4,000,000` cells (the domain's own `FABRIC_TOO_LARGE` ceiling) and is never moved to a worker; it runs on the UI thread inside the scheduler described under "Loom rendering design", and its budget is validated by measurement (performance section) rather than assumed safe.
 
+`SerialisableRestorationInput` carries `deckOrigin` and the attestations as a plain array of `{ cardId, attestation }` pairs (a `Map` is rebuilt inside the worker adapter), so the message stays structured-cloneable and the attestation list is the exact list `decideDeckOrigin` produced. The worker adapter adds, removes or alters no attestation.
+
 Both hosts version their protocol with an integer (requirement 29.3) and reject a mismatched `protocolVersion` with `UNSUPPORTED_PROTOCOL_VERSION` (detection, already defined by vision) or a Workbench-registered equivalent code for the restoration host, both routed through the Error_Map.
 
 ### Data flow for the P0 journey
@@ -268,7 +294,8 @@ sequenceDiagram
 
   U->>Scan: select Demo_Bundle card
   Scan->>Store: dispatchSiblingCall(loadDemoBundle)
-  Store-->>Scan: DemoBundle assets (image bytes, recorded Orientation, recorded LoomConfiguration)
+  Store-->>Scan: DemoBundle assets (image bytes, SampleMeta, Context_Deck, damagedCardIndex, recorded Orientation, recorded LoomConfiguration)
+  Scan->>Store: checkBundledImageDigest (sha256Hex of bytes vs manifest vs SampleMeta) -> origin decision
   U->>Scan: start detection
   Scan->>DC: run(imageBytes, profile, parameters, geometry)
   DC->>DW: RunMessage
@@ -276,8 +303,12 @@ sequenceDiagram
   DW-->>DC: ResultMessage(DetectionResult)
   DC-->>Scan: DetectionResult
   Scan->>Store: ARTIFACTS_REPLACED (mapDetection -> Deck, CardDetectionRecord)
+  U->>Studio: Continue to restoration
+  Studio->>Store: insertDetectedCard (domain insertCard at damagedCardIndex) -> Context_Deck + detected card
+  U->>Studio: PriorGatePanel: turn a Structural_Prior on (toggle, or recorded enablement on a real deck)
+  Studio->>Store: config.enabledPriors changed, or applyReviewAction(enable-synthetic-prior)
   U->>Studio: Propose restorations
-  Studio->>RH: run(RestorationInput)
+  Studio->>RH: run(RestorationInput incl. deckOrigin, syntheticAttestations)
   RH->>RW: RestorationRunMessage
   RW-->>RH: RestorationResultMessage(hypotheses, abstentions)
   RH-->>Studio: Hypotheses + Abstentions (NOT written to Deck)
@@ -294,7 +325,7 @@ sequenceDiagram
   Loom->>Store: exportDeckSvg(deck, options) [pure, synchronous, no worker]
 ```
 
-Every arrow into `Store` in this diagram is one call to exactly one sibling function (or, for `loadDemoBundle`/`mapDetection`/`exportDeckSvg`, one Workbench or sibling pure function); the Workbench never computes a detection, inference, metric or loom value itself (requirement 1.9).
+Every arrow into `Store` in this diagram is one call to exactly one sibling function (or, for `loadDemoBundle`/`checkBundledImageDigest`/`mapDetection`/`exportDeckSvg`, one Workbench or sibling pure function); the Workbench never computes a detection, inference, metric or loom value itself (requirement 1.9). The upload path differs in three places only: no Context_Deck is inserted into (restoration runs on the single card, requirement 31.10), `deckOrigin` is `"real"` with no attestation, and the prior toggle is replaced by the recorded `enable-synthetic-prior` flow.
 
 ### Error mapping layer
 
@@ -326,7 +357,7 @@ export function mapError(source: ErrorSource, code: string, originalMessage: str
 | e | Imported Correction_Log | `importCorrectionLog` | same |
 | f | Imported Restoration_Record | `importRestorationRecord` | same |
 | g | Benchmark report index / BrowserReport file | the browser-safe reader's importer in `report/browserReport.ts` | `screens/lab/LabScreen.tsx` |
-| h | Demo_Bundle assets | the owning importer per asset type, PLUS the Workbench's own `demoBundleManifest.ts` for the manifest shape itself | `demoBundle/loadDemoBundle.ts` |
+| h | Demo_Bundle assets: image, `sample.meta.json` copy, `context-deck.json`, `detection-result.json`, `approved-deck.json`, manifest (including `damagedCardIndex` and `imageDigest`) | image via detection intake; `SampleMeta` via detection's `SampleMeta` validator; `context-deck.json` and `approved-deck.json` via `importDeckJson`; `detection-result.json` via `importDetectionResult`; PLUS the Workbench's own `demoBundleManifest.ts` for the manifest shape itself (requirement 30.10) | `demoBundle/loadDemoBundle.ts` |
 | i | Generated Trail_Data | Workbench's own `trailData.ts` (no sibling owns this type) | `trail/loadTrailData.ts` |
 | j | Saved local session data (P2) | the importers of (b), (e), (f) | `persistence/workspaceStorage.ts` |
 | k | Route / deep-link parameters | Workbench's own `routeParams.ts` | `app/routes.ts` |
@@ -343,17 +374,26 @@ export function validateUserText(kind: UserTextKind, raw: string): { readonly ok
 // boundaries/demoBundleManifest.ts -- Workbench-owned, Boundary (h) manifest shape only
 export interface DemoBundleManifest {
   readonly format: "loom-lazarus-demo-bundle"; readonly schemaVersion: 1;
-  readonly imagePath: string; readonly imageLicenceNote: string;
+  readonly imagePath: string;                                  // "card.png", a copy of data/samples/card-synthetic-sample.png
+  readonly imageDigest: string;                                // "sha-256:<lowercase hex>" of the bytes of card.png
+  readonly imageLicenceNote: string;
+  readonly sampleMetaPath: string;                             // "sample.meta.json", a copy of the detection SampleMeta
+  readonly contextDeckPath: string;                            // "context-deck.json"
+  readonly damagedCardIndex: number;                           // integer, 0..(context deck length); position of the detected card after insertion
   readonly recordedOrientation: 0 | 90 | 180 | 270;
   readonly recordedLoomConfiguration: { readonly hookMapping: string; readonly mirror: string; readonly threadsPerHook: number };
-  readonly precomputedDetectionResultPath?: string;            // Req 6.8 fallback
-  readonly precomputedApprovedDeckPath: string;
+  readonly precomputedDetectionResultPath?: string;            // Req 6.8 fallback, regenerated from the real pipeline
+  readonly precomputedApprovedDeckPath: string;                // regenerated from the real pipeline
+  readonly placeholder: boolean;                               // true while the files come from test doubles (requirement 31.12)
 }
 export function validateDemoBundleManifest(json: unknown): { readonly ok: true; readonly value: DemoBundleManifest } | { readonly ok: false; readonly error: WorkbenchError };
 // checks: format/schemaVersion/unknown-field (same discipline as every sibling importer), orientation in
 // {0,90,180,270}, hookMapping/mirror are non-empty strings (the ACTUAL permitted sets are re-checked by
 // makeLoomConfig against the loaded MachineProfile once the profile is known -- this validator only
-// rejects structurally wrong JSON, never duplicates the domain's semantic check)
+// rejects structurally wrong JSON, never duplicates the domain's semantic check), imageDigest matches
+// ^sha-256:[0-9a-f]{64}$, damagedCardIndex is an integer >= 0. The upper bound (<= context deck length)
+// needs the loaded deck, so loadDemoBundle checks it right after importDeckJson returns the Context_Deck
+// and reports DEMO_BUNDLE_MANIFEST_INVALID with path "damagedCardIndex" (requirement 30.10).
 
 // boundaries/trailData.ts -- Workbench-owned, Boundary (i)
 export function validateTrailData(json: unknown): { readonly ok: true; readonly value: TrailData } | { readonly ok: false; readonly error: WorkbenchError };
@@ -366,8 +406,11 @@ export function validateTrailData(json: unknown): { readonly ok: true; readonly 
 // boundaries/boundaryRegistry.ts
 export const WORKBENCH_ERROR_CODES = [
   "UNKNOWN_SCREEN", "MALFORMED_ROUTE", "TEXT_LENGTH_OUT_OF_RANGE", "TEXT_CONTROL_CHAR",
-  "DEMO_BUNDLE_MANIFEST_INVALID", "TRAIL_DATA_INVALID", "WORKSPACE_DATA_INVALID",
+  "DEMO_BUNDLE_MANIFEST_INVALID", "DEMO_BUNDLE_DIGEST_MISMATCH", "TRAIL_DATA_INVALID", "WORKSPACE_DATA_INVALID",
 ] as const;
+// DEMO_BUNDLE_DIGEST_MISMATCH (requirement 30.11): the bundled image digest, the manifest imageDigest and the
+// SampleMeta imageDigest are not all equal. Not a load failure: the bundle still loads, as an unattested image
+// with deckOrigin "real" (requirement 31.4). The code carries the computed and the expected digest as values.
 export type WorkbenchErrorCode = typeof WORKBENCH_ERROR_CODES[number];
 export interface WorkbenchError { readonly code: WorkbenchErrorCode; readonly message: string; readonly path?: string }
 
@@ -375,6 +418,7 @@ export interface WorkbenchError { readonly code: WorkbenchErrorCode; readonly me
 export const BOUNDARY_OWNERS: Readonly<Record<string, "domain" | "vision" | "restoration" | "benchmark" | "workbench">> = {
   "image-upload": "vision", "deck-json": "domain", "session-log": "domain", "detection-result": "vision",
   "correction-log": "vision", "restoration-record": "restoration", "benchmark-report": "benchmark",
+  "sample-meta": "vision", "context-deck": "domain",
   "demo-bundle-manifest": "workbench", "trail-data": "workbench", "route-params": "workbench", "user-text": "workbench",
 };
 ```
@@ -424,14 +468,85 @@ The Demo_Bundle lives under `data/demo/` with a README stating source and licenc
 
 | Asset | Format | Owning importer |
 |---|---|---|
-| `card.png` (or `.jpg`) | a synthetic damaged card image, rendered by the same family of tooling `card-detection`'s synthetic renderer uses, unless a checked-licence real photograph is substituted later | detection intake (via `detect`) |
-| `manifest.json` | `DemoBundleManifest` (recorded Orientation, recorded `LoomConfiguration` fields, asset paths) | Workbench's `validateDemoBundleManifest` |
-| `detection-result.json` (optional) | a precomputed `DetectionResult` for the Image_Backend-load-failure fallback (Q3, resolved below) | `importDetectionResult` |
-| `approved-deck.json` | a precomputed, already-approved `Deck` for the Quick_Loom_Demo | `importDeckJson` |
+| `card.png` | a byte-for-byte copy of detection's `data/samples/card-synthetic-sample.png`. The builder renders no image of its own (requirement 31.11) | detection intake (via `detect`) |
+| `sample.meta.json` | a copy of detection's `data/samples/sample.meta.json`: `SampleMeta` with `generator`, `generatorVersion`, `sourceId`, `seed`, `parametersDigest`, `imageDigest` (`"sha-256:<hex>"`), `orientation`, `profileId`, `synthetic: true` | detection's `SampleMeta` validator |
+| `context-deck.json` | the Context_Deck: simulated intact cards built from a bitmap through the domain `bitmapToDeck`, no image evidence, every card labelled "Simulated intact cards (synthetic)" in the UI | `importDeckJson` |
+| `manifest.json` | `DemoBundleManifest` (image digest, `damagedCardIndex`, recorded Orientation, recorded `LoomConfiguration` fields, asset paths, `placeholder` flag) | Workbench's `validateDemoBundleManifest` |
+| `detection-result.json` (optional) | a precomputed `DetectionResult` for the Image_Backend-load-failure fallback (Q3, resolved below), regenerated from the real pipeline | `importDetectionResult` |
+| `approved-deck.json` | a precomputed, already-approved `Deck` for the Quick_Loom_Demo, regenerated from the real pipeline | `importDeckJson` |
+
+**Placeholder phase and regeneration.** Before the headless engine passes its gate (plan G3), `scripts/build-demo-bundle.ts` builds a Placeholder_Bundle from test doubles: `manifest.placeholder` is `true`, each placeholder file carries a visible placeholder marker in its content (a `placeholder` note field where the format allows one, otherwise the README table), and the README lists them. After the gate, the script is re-run against the real pipeline (`detect`, then restoration and approval of the damaged card through the sibling APIs) to regenerate `detection-result.json` and `approved-deck.json`, and sets `placeholder` to `false`. The release build runs a check (`assertNoPlaceholderBundle`) that reads `manifest.placeholder` and the placeholder markers in the built `dist/` copy of `data/demo` and fails the build if any is present (requirement 31.12). A placeholder bundle never produces an attestation: `checkBundledImageDigest` returns an unattested decision whenever `manifest.placeholder` is `true`.
 
 **Q3, resolved:** the fallback ships. If the Image_Backend fails to load (`BACKEND_LOAD_FAILED`) and `precomputedDetectionResultPath` is present in the manifest, `ScanScreen` offers "Continue with a precomputed result", loads it through `importDetectionResult`, and labels every value derived from it `"precomputed, not detected in your browser"` in the inspector and the condition summary (requirement 6.8). If the field is absent, `ScanScreen` shows only the failure state; the Workbench never fabricates a result. The Quick_Loom_Demo path (requirement 4) never depends on live detection at all -- it loads `approved-deck.json` directly -- so a Backend failure never blocks the three-Click journey.
 
 The recorded `LoomConfiguration` in `manifest.json` is shown on `LoomScreen` as an explicit, labelled selection ("chosen by the demonstration, change it below"), never as a silently-applied default (requirement 4.3, 4.8); it is validated against the loaded `MachineProfile`'s permitted `hookMappings`/`mirrorOptions` through `makeLoomConfig` before use, so a manifest that names an unsupported option surfaces through the normal Error_Map path (`UNSUPPORTED_HOOK_MAPPING`/`UNSUPPORTED_MIRROR`) rather than crashing.
+
+## Deck origin, attestation and deck context (requirement 31)
+
+Synthetic data is never marked `real` to pass validation, and a real photograph is never marked `synthetic` to avoid the real-deck warning. Two small modules, `demoBundle/deckOrigin.ts` and `demoBundle/contextDeck.ts`, are the only places that decide the origin or build the deck handed to restoration.
+
+### Attestation flow
+
+```ts
+// demoBundle/attestation.ts
+export interface DigestCheck {
+  readonly ok: boolean;
+  readonly computedDigest: string;           // "sha-256:<hex>" of the bytes actually loaded
+  readonly manifestDigest: string;
+  readonly sampleMetaDigest: string;
+}
+/** Async because sha256Hex uses crypto.subtle. Pure over its arguments. */
+export function checkBundledImageDigest(imageBytes: Uint8Array, manifest: DemoBundleManifest, meta: SampleMeta): Promise<DigestCheck>;
+// ok iff computedDigest === manifestDigest && computedDigest === sampleMetaDigest. Compared as strings.
+
+/** One entry, for the damaged card only. Context cards carry no image evidence and get none. */
+export function buildBundledAttestations(damagedCardId: string, meta: SampleMeta): ReadonlyMap<string, SyntheticImageAttestation>;
+// { generator, generatorVersion, sourceId, seed, parametersDigest, imageDigest } copied from meta, unchanged.
+
+// demoBundle/deckOrigin.ts
+export type DeckOriginDecision =
+  | { readonly deckOrigin: "synthetic"; readonly attestations: ReadonlyMap<string, SyntheticImageAttestation>; readonly source: "demo-bundle" }
+  | { readonly deckOrigin: "real"; readonly attestations: ReadonlyMap<string, never>;                            // always empty
+      readonly source: "upload" | "demo-bundle-unattested"; readonly reason?: { readonly computedDigest: string; readonly expectedDigest: string } | "placeholder-bundle" };
+export function decideDeckOrigin(input:
+  | { readonly kind: "demo-bundle"; readonly check: DigestCheck; readonly meta: SampleMeta; readonly damagedCardId: string; readonly placeholder: boolean }
+  | { readonly kind: "upload" }): DeckOriginDecision;
+```
+
+Sequence for the bundled card:
+
+1. `loadDemoBundle` validates every asset through its owner (boundary table, row h) and returns the bytes, `SampleMeta`, Context_Deck and manifest.
+2. The Scan screen calls `checkBundledImageDigest` once, when the card is selected (requirement 5.10). The result is kept in `ViewState` as view data, not in Session_Artifacts.
+3. After detection, the user continues to restoration. `decideDeckOrigin({kind: "demo-bundle", ...})` returns `synthetic` with one attestation, keyed by the damaged card's `cardId`, only when `check.ok` is true and `placeholder` is false. Otherwise it returns `real`, an empty map, and the reason: the computed and the expected digest (shown by `StatusBanner` through `DEMO_BUNDLE_DIGEST_MISMATCH` and the Error_Map), or "placeholder bundle". In that case the badge is not shown as an attestation claim (requirement 31.4).
+4. The restoration worker call receives `deckOrigin` and the attestations from the decision unchanged. `src/restore` still validates them: it requires every card with an `Image_Digest` in its evidence to have an entry whose `imageDigest` equals it, and returns `INVALID_CONFIGURATION` otherwise. The Workbench does not duplicate that check. It only avoids sending an attestation it has not confirmed.
+
+Wording: the attestation is shown as "declaration by the sample generator, bound to this image digest", never as proof of how the image was made (requirement 31.6).
+
+### Uploads are always real
+
+Code path: `UploadDropzone` and the file picker produce an `UploadedImage` value; only `decideDeckOrigin({kind: "upload"})` is called for it, and that branch has no code that reads a `SampleMeta`, a manifest or any attestation, and returns the fixed `real` decision with an empty map. No control, configuration value, file content or route parameter feeds the `demo-bundle` branch: that branch is reachable only with a `DigestCheck` built from the bytes loaded from `data/demo` by `loadDemoBundle`. The tests that enforce this (requirement 31.7), listed again under Testing Strategy:
+
+- `attestationOwnership.test.ts` (static): through the TypeScript compiler API, fails if `syntheticAttestations`, `buildBundledAttestations` or `SyntheticImageAttestation` is referenced in `src/ui` outside `demoBundle/attestation.ts`, `demoBundle/deckOrigin.ts` and the worker host that forwards the decision; fails if `deckOrigin: "synthetic"` appears as a literal anywhere except `deckOrigin.ts`; and fails if `UploadDropzone.tsx` or any module under `screens/scan/components/` imports from `demoBundle/attestation.ts`.
+- `uploadOrigin.test.ts` (runtime): feeds the upload flow files whose bytes equal the bundled image, and a file with a `sample.meta.json` beside it. In every case the run input has `deckOrigin: "real"` and no attestation, and no Simulated_Demo_Badge renders.
+- `digestMismatch.test.ts`: a bundled image with one byte changed gives `real`, the stated reason and no badge-as-attestation.
+
+### Deck-context step
+
+```ts
+// demoBundle/contextDeck.ts
+import { insertCard, type Deck, type Card, type Result, type ActionId } from "<domain index>";
+export function insertDetectedCard(contextDeck: Deck, detectedCard: Card, damagedCardIndex: number, actionId: ActionId): Result<Deck>;
+// calls insertCard(contextDeck, detectedCard, damagedCardIndex, actionId) once and returns its Result unchanged.
+// No other deck construction. An out-of-range index or a duplicate cardId returns the domain's error, mapped by the Error_Map.
+```
+
+`detectedCard` is the card that `mapDetection` returned from the Detection_Result, and `actionId` comes from the Workbench's action-id generator (a counter from configuration, no clock, no `Math.random`). The Domain_Deck passed to restoration is the `Deck` that `insertCard` returned, and restoration's `detectionEvidence` input holds the `CardDetectionRecord` for the damaged card only; the context cards have none. Because the context cards were built by `bitmapToDeck`, restoration sees their cells as `observed`, and the repeat and symmetry priors can use them.
+
+`DeckContextNotice` shows the step's outcome in the Studio screen: for the demo path, "The detected card was placed at position {n+1} among {m} simulated intact cards (synthetic)"; for an upload with no Context_Deck, "Only structure within this card is available for this deck. Repeat evidence across cards needs more cards." (requirement 31.10). In the upload case `insertDetectedCard` is not called: the deck is created from the single detected card by the domain `createDeck` through `dispatchSiblingCall`, and restoration runs on that single card.
+
+### Badge and labels
+
+`SimulatedDemoBadge` renders the text "Simulated demo card" and the Deck_Origin (`synthetic`) in `Shell`'s header slot, next to the approval status, whenever `artifacts.deck` has a card whose `cardId` has an attestation in the current `DeckOriginDecision`, or while the Quick_Loom_Demo's precomputed approved deck is loaded. It is driven by `deckOrigin` and `attestationRefs` from the restoration records, and for the precomputed deck by `manifest.placeholder === false` and a passing `DigestCheck`. It is absent for every deck built from an upload. `ContextCardLabel` renders "Simulated intact cards (synthetic)" on each Context_Deck card in the Studio card list, in the Loom card list and in the Compare view. In the inspector of every cell, region and hypothesis of an attested synthetic deck, the Workbench shows `SYNTHETIC_DECK_NOTICE` exactly as the restoration layer supplies it (from the `Evidence_View.syntheticDeckNotice` field), and never authors a replacement.
 
 ## Design Tokens
 
@@ -497,6 +612,8 @@ Colour is never the only signal (requirement 22.1). Each `Provenance_State` plus
 
 Measured against `bg.1` (`#1A1720`): `observed` 8.80, `repeat-inferred` 10.64, `symmetry-inferred` 8.27, `ambiguous` 8.32, `user-edited` 10.66, `unknown` 6.52, `needs-review` 10.54 -- all clear 3:1 for the marker glyph/outline as a UI component, and clear 4.5:1 where used as inline text in the legend.
 
+The Simulated_Demo_Badge and the context-card label are text labels, not provenance states: they use `color.text.primary` on `color.bg.2` (13.39 plain, 10.53 with noise) with a `color.accent.cyan` outline (10.64 on `bg.1`, 8.51 with noise; at least 3:1 as a component), a perforation-dot glyph, and the literal text, so the badge never relies on colour alone. It sits in the Shell header at all widths.
+
 ### Confidence ramp (not colour-only)
 
 The restoration-confidence heatmap layer uses a five-step amber-to-violet ramp PLUS a distinct hatch density, so a colourblind or greyscale view still orders confidence correctly by pattern density, and `null` is never a point on the ramp:
@@ -561,7 +678,8 @@ Layout convention on every screen (desktop): left navigation (fixed, ~220px), ce
 ```
 Desktop (>=1024px)
 +--------------------------------------------------------------------------------+
-| [P0] Loom Lazarus            Credits | Educational simulation | Glossary       |
+| [P0] Loom Lazarus   [P0] (Simulated demo card: synthetic)  Credits | Educational |
+|                                         simulation | Glossary                    |
 +--------------------------------------------------------------------------------+
 |                                                                                  |
 |            A damaged punched card, faintly lit, floats center-stage            |
@@ -570,11 +688,15 @@ Desktop (>=1024px)
 |         (Quick_Loom_Demo -- Click 1)                        the full           |
 |                                                              restoration"       |
 |                                                                                  |
+|   [P0] Results summary (read-only, from the committed quick report): link     |
+|         "See recorded results"  -> Lab screen, Results_Summary                  |
 |   [P1] (dismissible) First-run note: "No upload needed. Everything stays in    |
 |         your browser." [Got it]                                                |
 +--------------------------------------------------------------------------------+
 ```
-Narrow (<768px): the two primary actions stack full-width; the card art shrinks but both action labels stay visible with no scroll to reach them (requirement 4.1).
+Narrow (<768px): the two primary actions stack full-width; the card art shrinks but both action labels stay visible with no scroll to reach them (requirement 4.1). The badge appears only after the demonstration deck is loaded (it is absent on the very first render, before any deck exists, and absent for any uploaded deck).
+
+"Walk through the full restoration" opens the Scan screen with an ordered step list above the stage: 1 detect, 2 add to the context deck, 3 turn on a structural prior, 4 propose, 5 review, 6 approve, 7 weave, 8 export, with the current step marked by text and a marker (requirement 4.9). The step list is derived from `artifacts` presence (detection result, deck with the detected card, prior gate state, hypotheses, approval state, simulation state, export), not stored as separate state.
 
 ### Scan & Detect
 
@@ -590,6 +712,11 @@ Desktop, state = loading (detection running)
 |      |   |      below) [P0 holes/uncertain,       |   |   evidence."              |
 |      |   |       P1 grid/findings]                |   |                           |
 |      |   +--------------------------------------+   |                           |
+|      |   [P0] Digest check: computed sha-256:ab12.. |                           |
+|      |   = manifest = sample metadata, or the       |                           |
+|      |   mismatch reason. Upload: "treated as a     |                           |
+|      |   real photograph".                          |                           |
+|      |   +--------------------------------------+   |                           |
 |      |   Legend: o observed-hole o observed-none    |                            |
 |      |           ? ambiguous  x unknown  [] reserved |                           |
 +------+--------------------------------------------+----------------------------+
@@ -601,24 +728,44 @@ Tablet: overlay toggles move into a collapsible drawer above the image. Narrow: 
 ### Restoration Studio
 
 ```
-Desktop, state = loaded, one region selected
+Desktop, state = loaded, one region selected, demonstration deck (attested synthetic)
 +------+----------------------------------------+------------------------------+
-| Nav  | [P0] Layers: *Provenance  Heatmap  Hole |  [P0] Region inspector        |
-| Scan |        likelihood  Evidence  State      |  readIndex 142  card c-07     |
-| Studio*|                                        |  Provenance: repeat-inferred  |
-| Loom |   +----------------------------------+   |  Confidence: 0.81 (uncal.)   |
-| Lab  |   |   large card grid, cell markers   |   |  Evidence: "Repeat period 3: |
-| Trail|   |   per Provenance_State legend      |   |   11 of 13 supporting cards  |
-|      |   |   below the design-tokens table    |   |   agree ..."                 |
-|      |   +----------------------------------+   |  [P0] Alternatives (<=3):     |
-|      |   Legend: amber=observed cyan-hatch=     |    1. down  0.81 [Accept]     |
-|      |   repeat violet-hatch=symmetry rose-     |    2. lifted 0.34 [Select]    |
-|      |   dash=ambiguous green-tick=edited       |  [P0] [Reject] [Edit value]   |
-|      |   grey-X=unknown                         |  [P1] Condition override      |
-|      | [P0] Propose restorations | [P0] Approve |  [P0] Undo my edit /          |
-|      |   (blocking reasons listed if disabled)  |     Withdraw accepted sugg.   |
+| Nav  | [P0] (Simulated demo card: synthetic)   |  [P0] Region inspector        |
+| Scan | [P0] DeckContextNotice: "Detected card  |  readIndex 142  card c-07     |
+| Studio*|  placed at position 4 among 7          |  Provenance: repeat-inferred  |
+| Loom |  simulated intact cards (synthetic)"     |  Confidence: 0.81 (uncal.)   |
+| Lab  | [P0] Layers: *Provenance  Heatmap  Hole |  Evidence: "Repeat period 3: |
+| Trail|        likelihood  Evidence  State      |   11 of 13 supporting cards  |
+|      |   +----------------------------------+   |   agree ..."                 |
+|      |   |   large card grid, cell markers   |   |  Synthetic deck notice       |
+|      |   |   per Provenance_State legend      |   |   (text from restoration)    |
+|      |   |   below the design-tokens table    |   |  [P0] Alternatives (<=3):     |
+|      |   +----------------------------------+   |    1. down  0.81 [Accept]     |
+|      |   Legend: amber=observed cyan-hatch=     |    2. lifted 0.34 [Select]    |
+|      |   repeat violet-hatch=symmetry rose-     |  [P0] [Reject] [Edit value]   |
+|      |   dash=ambiguous green-tick=edited       |  [P1] Condition override      |
+|      |   grey-X=unknown                         |  [P0] Undo my edit /          |
+|      | [P0] PriorGatePanel (see below)          |     Withdraw accepted sugg.   |
+|      | [P0] Propose restorations | [P0] Approve |                              |
+|      |   (blocking reasons listed if disabled)  |                              |
 +------+----------------------------------------+------------------------------+
+
+[P0] PriorGatePanel, case 1: attested synthetic deck (toggle, no note, no real-deck warning)
+  Structural prior        State                        Control
+  repeat                  off | on (measurement v3,    [ ] Use this prior   (enabled only while a valid
+                          scope synthetic)                 Prior_Measurement exists for the kind)
+  symmetry                off                          [ ] Use this prior   (disabled: "no valid
+                                                           measurement for symmetry")
+  "Measured on synthetic data..." (Synthetic_Deck_Notice) on every dependent item.
+
+[P0] PriorGatePanel, case 2: real deck (upload) -- recorded enablement
+  repeat (synthetic-only prior)   disabled   [Enable on this real deck...]
+    -> note field (1..1000 chars)  [Record enablement]  -> shows Action_Id and Sequence_Number
+  Fixed Synthetic_Prior_Warning text on every dependent item and a deck-level warning while enabled.
+  No toggle of case 1 is offered.
 ```
+Upload without a context deck: the DeckContextNotice reads "Only structure within this card is available for this deck. Repeat evidence across cards needs more cards." and no badge is shown.
+
 Empty: "No detected card yet -- go to Scan & Detect." Loading: "Running restoration..." with progress. Error: mapped restoration error with recovery action. Incomplete-data: count of `unknown`/`ambiguous` cells banner above the grid. Needs-review: a list panel above the grid: "3 corrections need your review" with confirm/discard per item `[P1]`.
 
 Tablet: inspector becomes a slide-up panel triggered by selecting a cell; legend collapses under a "Legend" disclosure. Narrow: layer toggles become a single dropdown; Alternatives list becomes full-width cards below the (now smaller) card grid.
@@ -645,7 +792,23 @@ Empty (unapproved deck): "Only an approved deck runs on the loom. [Go to approva
 
 Tablet/narrow: configuration controls collapse above the stage; playback controls pin to the bottom as a fixed bar.
 
-### Benchmark Lab (P1)
+For the demonstration deck, the Shell header shows the Simulated_Demo_Badge on this screen too, and the card list beside the active card labels each Context_Deck card "Simulated intact cards (synthetic)".
+
+### Results summary (P0) and Benchmark Lab (P1)
+
+The Lab route renders two layers. The P0 Results_Summary is a read-only table of the committed quick-profile Browser_Report read from `data/benchmark/browser/index.json`: the honesty statements verbatim, the synthetic section and the real-photograph section as separate blocks, each metric with its sample size and Split_Role, `undefined`, `not-estimated` and `not-evaluated` shown as words with reasons, and the Component_Stamp. It has no chart and no report picker (it shows the quick-profile report the index names). The P1 Lab adds the picker, intervals charts, reliability diagram, baselines, thresholds and failure examples below.
+
+```
+Desktop, Results_Summary [P0] (state = report loaded)
++------+----------------------------------------+------------------------------+
+| Nav  | [P0] "Synthetic results measure the     | Dataset: v3  seed 20260700   |
+| Lab* |  system on generated data..." (verbatim) | Split: held-out  n=840 fam.  |
+|      | SYNTHETIC       accuracy(all) 0.71       | Profile: quick               |
+|      |   accuracy(answered) 0.88  coverage 0.80 | ComponentStamp: dom 1.1.0 .. |
+|      | REAL PHOTOGRAPHS   not evaluated (reason)|                              |
++------+----------------------------------------+------------------------------+
+```
+(Numbers in this wireframe are placeholders for layout only; the screen shows only values read from the report.)
 
 ```
 Desktop, state = report loaded
@@ -664,7 +827,7 @@ Desktop, state = report loaded
 |      |  Thresholds: accuracy>=0.70 "not set"      |                              |
 +------+----------------------------------------+------------------------------+
 ```
-Empty: "No committed report is bundled in this build." Error: mapped benchmark error. Incomplete-data: `undefined` metrics shown as the word "undefined" with reason; `not-estimated` intervals with reason. Partial: tracks individually marked `not-evaluated`.
+Empty (both layers): "No committed report is bundled in this build." and no number. Error (both layers): mapped benchmark error, no partial report. Incomplete-data: `undefined` metrics shown as the word "undefined" with reason; `not-estimated` intervals with reason. Partial: tracks individually marked `not-evaluated`.
 
 ### Kiro Trail / About (P1, credits P0)
 
@@ -696,13 +859,15 @@ Component tree (screen-owned subtrees only; `Shell` wraps every screen). Each ro
 Shell                                   (req 3)
 ├─ LeftNav                              (req 3.1, 3.6)
 ├─ Inspector (slot)                     (req 3.1)
+├─ SimulatedDemoBadge [P0]              (req 3.10, 31.5)
 ├─ StatusBanner / ErrorBoundary         (req 20.4-20.6, 27)
 ├─ SkipLink, LiveRegion                 (req 21.9, 21.7)
 ├─ CreditsPanel + GlossaryTooltip entry (req 3.2-3.3, 3.8, 19)
 └─ <route outlet>
    ├─ StartScreen                       (req 4)
    ├─ ScanScreen                        (req 5-8)
-   │  ├─ UploadDropzone [P1]            (req 5.2-5.3, 30a)
+   │  ├─ UploadDropzone [P1]            (req 5.2-5.3, 5.11, 30a; never calls attestation code)
+   │  ├─ DemoCardPicker + DigestCheckNotice [P0] (req 5.1, 5.6, 5.10, 31.3-31.4)
    │  ├─ CardViewer2D                   (req 5.3-5.4, 7.9)
    │  │  └─ OverlayLayer                (req 7.1-7.4, 7.10)
    │  ├─ ProgressBar + CancelControl    (req 6.1-6.4)
@@ -712,6 +877,8 @@ Shell                                   (req 3)
    │  ├─ CardViewer                     (req 9.1-9.12)
    │  │  ├─ ProvenanceLegend
    │  │  └─ LayerToggles
+   │  ├─ DeckContextNotice [P0]         (req 31.8-31.10; context-card labels via ContextCardLabel)
+   │  ├─ PriorGatePanel [P0]            (req 10.3-10.4, 10.9-10.12; two cases, see contract below)
    │  ├─ RegionInspector                (req 11.1-11.10)
    │  ├─ AlternativesPanel              (req 11.3-11.4, 12.1)
    │  ├─ CorrectionToolbar              (req 12.1-12.14)
@@ -724,8 +891,10 @@ Shell                                   (req 3)
    │  ├─ HookLiftPanel                  (req 15.6)
    │  ├─ PlaybackControls               (req 15.7, 15.9-15.10, 15.15)
    │  └─ WeaversNotesPanel [P1]         (req 15.13-15.14)
-   ├─ LabScreen [P1]                    (req 18)
-   │  ├─ ReportPicker
+   ├─ LabScreen                         (req 18; Results_Summary P0, the rest P1)
+   │  ├─ ResultsSummary [P0]            (req 18.20-18.21, 18.3-18.9)
+   │  ├─ HonestyStatements [P0]         (req 18.5)
+   │  ├─ ReportPicker [P1]
    │  ├─ MetricTable
    │  ├─ ReliabilityDiagram
    │  ├─ BaselineComparison
@@ -761,6 +930,32 @@ export interface CorrectionToolbarProps {
   readonly onWithdrawInference: () => void;       // calls restoration's undo-action (withdrawInference under it)
   readonly undoAvailable: boolean; readonly withdrawAvailable: boolean;
   readonly blockedReason?: MappedError;           // e.g. USER_EDIT_PROTECTED
+}
+export type PriorGateCase = "attested-synthetic" | "real";
+export interface PriorGateRow {
+  readonly kind: StructuralPriorKind;                           // "repeat" | "symmetry"
+  readonly gate: PriorGateState;                                // from evaluatePriorGate, never recomputed
+  readonly hasValidMeasurement: boolean;                        // taken from the gate state's measurementRef
+}
+export interface PriorGatePanelProps {
+  readonly gateCase: PriorGateCase;                             // from DeckOriginDecision: synthetic => attested-synthetic, real => real
+  readonly rows: readonly PriorGateRow[];
+  readonly syntheticDeckNotice?: string;                        // SYNTHETIC_DECK_NOTICE text, supplied by restoration (case 1)
+  readonly syntheticPriorWarning?: string;                      // SYNTHETIC_PRIOR_WARNING_TEXT, supplied by restoration (case 2)
+  // case 1: a configuration toggle; the next run receives config.enabledPriors changed. No note, no entry.
+  readonly onToggleKind?: (kind: StructuralPriorKind, on: boolean) => void;
+  // case 2: recorded enablement through applyReviewAction(enable-synthetic-prior | disable-synthetic-prior)
+  readonly onRecordEnablement?: (kind: StructuralPriorKind, enable: boolean, note: string) => void;   // note validated 1..1000 by userText
+  readonly lastError?: MappedError;                             // e.g. PRIOR_MEASUREMENT_MISSING, shown with the previous gate state kept
+}
+export interface DeckContextNoticeProps {
+  readonly kind: "demo-context-deck" | "upload-single-card";
+  readonly damagedCardPosition?: number;                        // 1-based, demo only
+  readonly contextCardCount?: number;                           // demo only
+}
+export interface SimulatedDemoBadgeProps { readonly deckOrigin: "synthetic"; /* rendered only for synthetic; never rendered for real */ }
+export interface ResultsSummaryProps {
+  readonly report: BrowserReport;                               // loaded through the browser-safe reader, read-only
 }
 export interface ApprovalPanelProps {
   readonly blockers: readonly { readonly kind: "PROPOSALS_UNREVIEWED" | "OVERRIDES_UNRESOLVED" | "PENDING_CORRECTIONS" | "UNRESOLVED_CELLS"; readonly count: number; readonly totalCount: number; readonly onFocusFirst: () => void }[];
@@ -872,7 +1067,10 @@ Every transition above calls exactly one of the domain's `create`/`step`/`pause`
 | Record a geometry correction (Scan, P1) | `recordGeometryCorrection(log, input, ctx)` then re-run `detect` with `foldGeometry(log)`/`restartStageFor` |
 | Record a cell correction (Scan, P1) | `recordCellCorrection(log, input, current)` -- no detection re-run |
 | Confirm/discard a needs-review correction | `resolveReview(log, input, current, tolerances?)` |
-| Enable/disable a synthetic-only prior | `recordSyntheticPriorEnablement(entries, input)` then re-run restoration |
+| Enable/disable a synthetic-only prior on a real deck (note required) | `recordSyntheticPriorEnablement(entries, input)` (the `enable-synthetic-prior` / `disable-synthetic-prior` review actions) then re-run restoration |
+| Turn a Structural_Prior on or off on an attested synthetic deck | change `RestorationConfig.enabledPriors` for the next `runInference`; `evaluatePriorGate` returns the resulting state; no enablement entry, no deck change |
+| Insert the detected card into the Context_Deck | `insertCard(contextDeck, detectedCard, damagedCardIndex, actionId)` |
+| Digest the bundled image | `sha256Hex(imageBytes)` (vision), compared as strings with the manifest and `SampleMeta` digests |
 | Loom config choice | `makeLoomConfig(input, profile)` then `create(deck, config)` |
 | Loom Step/Play tick/Seek/Reset | `step`/`seek`/`reset`/`pause`/`resume` on the current `SimulationState` |
 | Export Deck JSON | `exportDeckJson(deck, extras?)` |
@@ -893,7 +1091,7 @@ A "Click" per the Glossary is one activation by pointer press or Enter/Space on 
 
 ### P0 survival with every P2 feature disabled
 
-A Vite build flag (`VITE_DISABLE_P2=1`) causes `shared/layout/Shell.tsx` to render no ambient-motif layer, `persistence/workspaceStorage.ts`'s save control to be unmounted, `WeaversNotesPanel`'s colour controls to stay but with no opt-in storage behind them, and `screens/loom/viewModel.ts` to skip the synchronised-zoom and deep-link-beyond-screen-route code paths entirely (those are P2 features that do not exist yet in P0/P1 code, so "disabling" them is "not building them" rather than a runtime flag in most cases -- the flag's real job, tested by the end-to-end suite, is the ambient-motif and persistence toggles, which are the only P2 items implemented as always-present code with an off-switch). The end-to-end P0 journey test (requirement 28.1) runs against a build with this flag set, proving the P0 path needs none of it.
+A Vite build flag (`VITE_DISABLE_P2=1`) causes `shared/layout/Shell.tsx` to render no ambient-motif layer, `persistence/workspaceStorage.ts`'s save control to be unmounted, `WeaversNotesPanel`'s colour controls to stay but with no opt-in storage behind them, and `screens/loom/viewModel.ts` to skip the synchronised-zoom and deep-link-beyond-screen-route code paths entirely (those are P2 features that do not exist yet in P0/P1 code, so "disabling" them is "not building them" rather than a runtime flag in most cases -- the flag's real job, tested by the end-to-end suite, is the ambient-motif and persistence toggles, which are the only P2 items implemented as always-present code with an off-switch). The end-to-end P0 journey test (requirement 28.1) runs against a build with this flag set, proving the P0 path needs none of it. The `PriorGatePanel`, `DeckContextNotice`, `SimulatedDemoBadge` and `ResultsSummary` are P0 and sit outside this flag: they are present in that build, and the journey needs them (requirement 2.7).
 
 ## Loom Rendering Design
 
@@ -984,7 +1182,9 @@ Rendering rules, enforced by `MetricTable`/`ReliabilityDiagram`/`BaselineCompari
 - `unverifiedMarkers` feed a "What is not verified" link shared with the cross-cutting view of requirement 26.4.
 - Two reports with different `ComponentStamp`s are never placed in one `BaselineComparison`/`MetricTable` view without an explicit "different component versions" label (requirement 18.19); `LabScreen`'s `ReportPicker` is single-select only in P0/P1 to keep this simple -- a future comparison view is out of scope here.
 
-Static report location: `data/benchmark/<datasetVersion>-<executionProfile>.browserreport.json`, copied into the Vite static bundle unchanged (no transform, no re-signing); the committed quick-profile report's exact path is confirmed under "Amendments needed", item 6. Size stays under the benchmark design's own `BROWSER_REPORT_MAX_BYTES` ceiling (2 MiB initial value, 64 KiB-8 MiB documented range) -- the Workbench does not re-check this at load time, trusting the sibling's own build-time guarantee, but a corrupted-input test (Testing Strategy) still exercises an oversized file through the importer's own `INPUT_TOO_LARGE` path.
+**Results_Summary (P0).** `ResultsSummary` and `HonestyStatements` are the P0 subset of this screen (the user approved "Benchmark Lab P1, essential results in P0"). `LabScreen` always loads `data/benchmark/browser/index.json` through the browser-safe reader and renders `ResultsSummary` for the quick-profile entry the index lists; the P1 `ReportPicker`, charts, baselines, thresholds and failure examples mount below it only when built. `ResultsSummary` applies the same rendering rules as the list below (words, never fabricated numbers; separate synthetic and real-photograph sections; verbatim honesty statements) with no chart, and shows the same empty and error states: index missing means "No committed report is bundled in this build" with no number; an invalid index or report shows the mapped `BENCHMARK_ERROR_CODES` message with no partial report (requirements 18.3, 18.4, 18.20).
+
+Static report location (requirement 18.21, plan item A0-7): `data/benchmark/browser/index.json` and the `BrowserReport` files it lists beside it, copied into the Vite static bundle unchanged (no transform, no re-signing). The Workbench fetches only from that folder and makes no other report path known to the reader. Size stays under the benchmark design's own `BROWSER_REPORT_MAX_BYTES` ceiling (2 MiB initial value, 64 KiB-8 MiB documented range) -- the Workbench does not re-check this at load time, trusting the sibling's own build-time guarantee, but a corrupted-input test (Testing Strategy) still exercises an oversized file through the importer's own `INPUT_TOO_LARGE` path.
 
 ## Data Models
 
@@ -997,7 +1197,9 @@ export interface ViewState {
   readonly scan: { readonly selectedPositionRef?: { readonly cardId: string; readonly readIndex: number };
                    readonly overlayToggles: Readonly<Record<"holes" | "grid" | "reserved" | "unknownRegions" | "findings", boolean>>;
                    readonly zoom: number; readonly pan: { readonly x: number; readonly y: number };
-                   readonly activeRunId?: string };
+                   readonly activeRunId?: string;
+                   readonly source?: "demo-bundle" | "upload";                 // which intake produced the current image
+                   readonly digestCheck?: DigestCheck };                       // demo-bundle only; view data, never a source of truth
   readonly studio: { readonly selectedCellRef?: { readonly cardId: string; readonly readIndex: number };
                      readonly activeLayer: "provenance" | "heatmap" | "holeLikelihood" | "evidence" | "state";
                      readonly zoom: number; readonly sideBySideOpen: boolean };
@@ -1079,7 +1281,10 @@ One test file per component listed in "Component Breakdown", asserting props-to-
 
 ### Playwright end-to-end and accessibility
 
-- **P0 journey** (requirement 28.1-28.4): from first load, Demo_Bundle selection, detection, restoration accept/select/edit, approval, Loom mirror+hook-mapping choice, play-to-completion, Deck JSON and Unverified SVG export; asserts Verified mode present-and-disabled with named entries, the single-activation no-dialog download, the Cutting_Caveat text and metadata in the downloaded file, and the banned-wording scan on that file.
+- **P0 journey** (requirement 28.1-28.4, 28.14): from first load, Demo_Bundle selection (digest check passes), detection, **assertion that the detected card now sits in the Context_Deck at `damagedCardIndex` (read from the deck returned by `insertCard`, with the context cards labelled "Simulated intact cards (synthetic)")**, **turning a Structural_Prior on through the PriorGatePanel toggle and asserting the resulting gate state and the Synthetic_Deck_Notice**, restoration accept/select/edit, approval, Loom mirror+hook-mapping choice, play-to-completion, Deck JSON and Unverified SVG export; asserts Verified mode present-and-disabled with named entries, the single-activation no-dialog download, the Cutting_Caveat text and metadata in the downloaded file, and the banned-wording scan on that file.
+- **Upload-path journey** (requirement 28.15): a second Playwright test uploads a generated card file, asserts the run input carries `deckOrigin: "real"` with no attestation and that no Simulated_Demo_Badge renders, asserts the "within-card structure only" notice, turns a Synthetic_Only_Prior on through the recorded `enable-synthetic-prior` flow with a note, and asserts the Synthetic_Prior_Warning on every dependent item and that the case-1 toggle is not offered. The upload file's bytes are the bundled image's bytes in one variant, to prove that identical bytes still give `real`.
+- **Origin and bundle tests** (requirement 31.7, 30.10, 30.11): `attestationOwnership.test.ts` (static, described under "Deck origin, attestation and deck context"), `uploadOrigin.test.ts`, `digestMismatch.test.ts` (bundled image with one byte changed, and separately a manifest digest that differs from the `SampleMeta` digest: both give `real`, the stated reason and no attestation), `badgePlacement.test.tsx` (the badge renders on every screen that shows the demonstration deck, including Loom and Compare, and on none that shows an uploaded deck), `placeholderBundle.test.ts` (a manifest with `placeholder: true` never yields an attestation, and `assertNoPlaceholderBundle` fails a build output that contains one), and a corrupted-input test for each added Boundary input (truncated `sample.meta.json`, `damagedCardIndex` of `-1`, `1.5` and `contextDeck.length + 1`, malformed `imageDigest`, unknown manifest field).
+- **Results_Summary test**: loads the committed `data/benchmark/browser/index.json` through the browser-safe reader and asserts the honesty statements verbatim and the words "undefined", "not estimated" and "not evaluated" wherever the report records those statuses, and the empty and error states when the file is missing or corrupted (requirement 18.20, 18.3, 18.4).
 - **Keyboard-only P0 journey** (requirement 28.6): the same path, no pointer events.
 - **Accessibility suite** (requirement 28.5): axe-core via `@axe-core/playwright` on every screen in every defined state, zero violations at WCAG 2.1 AA; plus the contrast test (sampling rendered pixels behind text/markers/focus rings per the Design Tokens table, failing below 4.5:1/3:1), the reduced-motion emulation test (`prefers-reduced-motion: reduce`, asserting ambient motifs stop and Loom playback becomes step-through with identical data), and the flash-rate test (measuring the fastest configured transition rate against the three-per-second ceiling).
 - **Monochrome test**: renders `StudioScreen`'s card in CSS `grayscale(1)` and asserts every Provenance_Marker pair still differs by shape/pattern and label text (requirement 22.9).
@@ -1100,15 +1305,15 @@ Playwright MCP is used only as a development-time tool for agent-driven manual v
 | Requirement | Design elements |
 |---|---|
 | 1.1-1.11 | Module layout; Dependency rule; Layering diagram; `AppStore`/`dispatchSiblingCall`; Worker orchestration |
-| 2.1-2.6 | Tiers marked `[P0]`/`[P1]`/`[P2]` throughout Wireframes, Component Breakdown, Interaction Contracts; "P0 survival with every P2 feature disabled" |
-| 3.1-3.9 | `Shell`, `LeftNav`, `Inspector`; Start-view and every screen wireframe's header row; Font loading strategy (3.9) |
-| 4.1-4.10 | Start-view wireframe; Demo Bundle section; Click counter; Quick_Loom_Demo data-flow sequence |
-| 5.1-5.9 | Scan wireframe; `UploadDropzone`; Boundary (a); Demo Bundle fallback (Q3) |
+| 2.1-2.7 | Tiers marked `[P0]`/`[P1]`/`[P2]` throughout Wireframes, Component Breakdown, Interaction Contracts; "P0 survival with every P2 feature disabled" (2.7: `PriorGatePanel` is P0 and part of the journey) |
+| 3.1-3.10 | `Shell`, `LeftNav`, `Inspector`; Start-view and every screen wireframe's header row; Font loading strategy (3.9); `SimulatedDemoBadge` and the badge note under Design Tokens (3.10) |
+| 4.1-4.10 | Start-view wireframe (including the full-journey step list, 4.9); Demo Bundle section; Click counter; Quick_Loom_Demo data-flow sequence |
+| 5.1-5.11 | Scan wireframe (digest line); `UploadDropzone`; `DemoCardPicker`/`DigestCheckNotice`; `checkBundledImageDigest` (5.10); upload treated as real (5.11, "Uploads are always real"); Boundary (a); Demo Bundle fallback (Q3) |
 | 6.1-6.9 | Worker orchestration (`detectionClient`); Scan progress/cancel wireframe states |
 | 7.1-7.10 | `CardViewer2D`/`OverlayLayer`; Provenance/marker tokens; Scan legend |
 | 8.1-8.10 | `AlignmentEditor` [P1]; Manual-correction calls table |
 | 9.1-9.13 | `CardViewer` (Studio); Provenance/confidence-ramp tokens; Layer toggles |
-| 10.1-10.8 | Restoration data-flow sequence; Prior-gate calls (`evaluatePriorGate`, `recordSyntheticPriorEnablement`) |
+| 10.1-10.12 | Restoration data-flow sequence; Studio wireframe with `PriorGatePanel` (both cases); `PriorGatePanelProps`; Prior-gate rows of the sibling calls table (`enabledPriors` toggle, `recordSyntheticPriorEnablement`); "Deck origin, attestation and deck context" (10.1 inputs) |
 | 11.1-11.10 | `RegionInspector`, `AlternativesPanel`; Exact sibling calls table |
 | 12.1-12.14 | `CorrectionToolbar`; State machine (restoration review); Exact sibling calls table |
 | 13.1-13.9 | `ApprovalPanel`; Approval-blocking message contract; `SideBySide` [P1] |
@@ -1116,7 +1321,7 @@ Playwright MCP is used only as a development-time tool for agent-driven manual v
 | 15.1-15.16 | Loom wireframe; Loom Rendering Design (scheduler, `ConfigPicker`, `WeaversNotesPanel`) |
 | 16.1-16.7 | Export Design (Deck JSON); `ExportPanel` |
 | 17.1-17.12 | Build-time Kiro Trail conversion; Trail wireframe; Trail build test |
-| 18.1-18.19 | Benchmark Lab Design; Lab wireframe |
+| 18.1-18.21 | Benchmark Lab Design (Results_Summary P0 paragraph and static report location, 18.20-18.21); Results summary and Lab wireframes; `ResultsSummary`, `HonestyStatements` |
 | 19.1-19.7 | `GlossaryPanel`/`GlossaryTooltip`; `FirstRunPanel` |
 | 20.1-20.8 | Error mapping layer; `StatusBanner`/`ErrorBoundary` |
 | 21.1-21.9 | Keyboard maps; Focus management; ARIA roles |
@@ -1126,26 +1331,29 @@ Playwright MCP is used only as a development-time tool for agent-driven manual v
 | 25.1-25.10 | Persistence section; Demo Bundle (no user photos); Playwright privacy test (Testing Strategy) |
 | 26.1-26.7 | Confidence ramp tokens; "What is not verified" link (Benchmark Lab Design); P2/P7 property tests |
 | 27.1-27.7 | `StatusBanner`/`ScreenState`; per-screen state notes in Wireframes |
-| 28.1-28.13 | Testing Strategy (Playwright end-to-end, accessibility, property tests, golden tests) |
+| 28.1-28.16 | Testing Strategy (Playwright end-to-end including card insertion and prior toggle (28.14), the upload-path test (28.15), origin and bundle tests (28.16); accessibility, property tests, golden tests) |
 | 29.1-29.5 | Reconciliation table (Q1); Worker protocol versions; this document's component contracts section marked frozen at approval |
-| 30.1-30.9 | Runtime validation at boundaries table; `boundaries/*`; `validatorOwnership.test.ts` |
+| 30.1-30.11 | Runtime validation at boundaries table (row h, `sample-meta`, `context-deck`); `boundaries/*`; `DemoBundleManifest` validator; `DEMO_BUNDLE_DIGEST_MISMATCH`; `validatorOwnership.test.ts` |
+| 31.1-31.12 | "Deck origin, attestation and deck context": attestation flow (31.1, 31.3, 31.4, 31.6), uploads are always real (31.2, 31.7), deck-context step (31.8, 31.10), badge and labels (31.5, 31.9), Demo Bundle placeholder phase and builder (31.11, 31.12); Testing Strategy origin and bundle tests |
 
 ## Amendments Needed in Sibling Specs
 
 Listed only; none are applied by this document, per the user's explicit instruction and the approved requirements.md's own "Amendments to earlier specs" section, which this reproduces and makes concrete against the real exports found during design.
+
+Applied elsewhere and therefore removed from this list: the worker import rule (plan A0-2, detection design), the committed report location `data/benchmark/browser/` (plan A0-7), the `deckOrigin` and per-card `syntheticAttestations` inputs and the `SYNTHETIC_DECK_NOTICE` (plan A0-4, restoration design), `SampleMeta` and the single sample producer (plan A0-5, A0-9, detection design), and the domain `insertCard` operation (domain design). The domain marker items below remain open.
 
 1. **Domain `MachineProfile` markers for orientation (D3) and hole polarity (D7).** No `VerificationStatus` field exists for either today. Until added, `computeRequiredVerifiedFieldStatuses` reports both as `"no-marker-available"`, so `Verified_Export_Mode` cannot become available for any profile. Options: (a) add `profile.verification.orientation` and `profile.verification.holePolarity` to `MachineProfile` (a domain minor-version addition); (b) confirm that `card-detection`'s `PolarityAssumption`/orientation-source fields are the intended home instead, and have the Workbench read them from the `DetectionResult`/`CardDetectionRecord` rather than the profile. Recommended: (a), because requirement 14.2 frames all eleven entries as *profile* facts, and detection's own orientation/polarity fields are per-run assumptions about one photograph, not a profile-level verification status.
 2. **Domain markers for hole spacing, hole sizes and end-hole geometry.** `physicalDimensions` and `endHoles` currently carry one verification status each as a whole; requirement 14.2(b)/(c) distinguishes "card dimensions" from "hole spacing and hole sizes" and "end-hole positions" from "end-hole sizes." Recommended: confirm that the existing single markers are intended to cover their whole group (simplest, no domain change), or split them if a future measurement verifies one part before another.
 3. **Domain SVG exporter metadata for the selected hook mapping, threads-per-hook and mirror.** `exportDeckSvg`'s `<metadata>` today lists `gridSize`, `reservedPositions`, `endHoles`, `readOrder`, `physicalDimensions` verification status (per that design's own "SVG exporter" section); it does not yet include the hook-mapping/threads-per-hook/mirror statuses used for a given export. Until added, `ExportPanel` lists these three Required_Verified_Fields entries in the on-screen `Unverified_Assumption_Metadata` summary from the profile directly, but the downloaded file's own `<metadata>` cannot yet carry them, so the on-screen summary and file content diverge for exactly these three entries. Recommended: extend `exportDeckSvg`'s options to accept the selected `hookMapping`/`mirror`/`threadsPerHook` and write their verification status into `<metadata>`.
 4. **Domain: a single accessor for the eleven Required_Verified_Fields statuses.** Today the Workbench's `computeRequiredVerifiedFieldStatuses` reads eight separate `profile.verification.*` fields plus one per-hook-mapping field, and has no marker at all for two more. Recommended: once items 1-2 land, add one domain export (for example `requiredExportVerificationStatus(profile, selection)`) so the eleven-entry logic is defined once, in the domain, not duplicated in the Workbench; until then, the Workbench's own `computeRequiredVerifiedFieldStatuses` is the only implementation and is documented here as a stand-in.
 5. **Restoration: richer progress reporting for `runInference`.** The restoration design explicitly leaves worker-protocol design to a later consumer ("A Web Worker adapter ... src/restore defines no worker protocol of its own"). `runInference` itself exposes no intermediate checkpoints, so `restorationWorkerHost`'s progress is only 0/1. Recommended: no spec change required for P0 (the Workbench's "running..." state with no fraction is honest and sufficient); revisit only if restoration later adds internal staging that could report real progress.
-6. **Benchmark: confirm the committed quick-profile `BrowserReport`'s exact file name/path.** The benchmark design's own open question Q2/its "Amendments needed" item 3 defers the final `scripts/` location; this design assumes `data/benchmark/<datasetVersion>-<executionProfile>.browserreport.json` by extension of that design's own stated pattern (`data/benchmark/...` for committed artifacts) but the benchmark spec's own tasks phase is the authority. Recommended: confirm the path when benchmark's tasks phase runs, and update `LabScreen`'s `ReportPicker` fetch path to match exactly, with no renaming on the Workbench side.
-7. **`structure.md`: the `ui` dependency line.** Per requirements.md's own amendment item 7, `structure.md`'s dependency-direction note should name the benchmark browser-safe reader subpath explicitly (`src/benchmark/report/browserReport.ts` or whatever path the benchmark tasks phase finalises) so the import-boundary tests across specs agree on exactly one allowed path.
+6. **Detection: export `sha256Hex` (or a thin `digestBytes` wrapper) from the `src/vision` public index.** `checkBundledImageDigest` needs the same function that produces Image_Digest, so that the computed digest and the `SampleMeta` digest use one algorithm and one text form. Today `sha256Hex` lives in `hash.ts`; the detection design does not say whether the index re-exports it. If it does not, add the export (a minor vision interface addition). The Workbench must not write its own hash function.
+7. **`structure.md`: the `ui` dependency line.** Per requirements.md's own amendment item 7, `structure.md`'s dependency-direction note should name the benchmark browser-safe reader subpath explicitly (`src/benchmark/report/browserReport.ts`) so the import-boundary tests across specs agree on exactly one allowed path.
 8. **`kiro-evidence.md`: state the build-time verification rule.** Per requirements.md's own amendment item 9, `kiro-evidence.md` should state the same "at least one checkable evidence reference" rule `scripts/build-trail.ts`'s `verifyEntry` implements, so the steering file and the converter cannot drift.
 
 ## Assumptions Requiring Verification
 
-Unchanged from the approved `requirements.md`'s own table (A1-A11, W1-W5, D3, D7); this design adds no new assumption and resolves W1 concretely via the reconciliation performed in "Export Design" (the three entries with no domain marker are now named exactly, not left as a category). Every dependence on an unverified Garín fact in this document carries the same `// UNVERIFIED <id>` comment convention the four sibling designs use, applied at the point each is read (`computeRequiredVerifiedFieldStatuses`, `ConfigPicker`, the Studio legend's "reserved, not an instruction" marker).
+Unchanged from the approved `requirements.md`'s own table (A1-A11, W1-W7, D3, D7); this design adds no new assumption. W6 (the attestation is a caller declaration bound to an image digest, not proof of origin) is handled by the wording rule and the attachment rules of "Deck origin, attestation and deck context"; W7 (context cards are simulated stand-ins) by the `ContextCardLabel` and `DeckContextNotice` text. This design resolves W1 concretely via the reconciliation performed in "Export Design" (the three entries with no domain marker are now named exactly, not left as a category). Every dependence on an unverified Garín fact in this document carries the same `// UNVERIFIED <id>` comment convention the four sibling designs use, applied at the point each is read (`computeRequiredVerifiedFieldStatuses`, `ConfigPicker`, the Studio legend's "reserved, not an instruction" marker).
 
 ## Open Questions Requiring Confirmation
 
@@ -1156,6 +1364,19 @@ Unchanged from the approved `requirements.md`'s own table (A1-A11, W1-W5, D3, D7
 - **[CONFIRM] Q5 "Replay".** This design keeps the two operations named distinctly: `PlaybackControls`' "Replay" button (restart the scheduler at pass 0 and play) versus a separate "Replay session" affordance mounted from `LoomScreen`/`StudioScreen` that calls the domain's `replaySession`/`replaySessionJson` with digest verification, surfaced through the Error_Map for `SESSION_DIGEST_MISMATCH` and the other session errors. Recommended default: keep both, as designed; if judged confusing, option (b) is to drop the digest-verified "Replay session" affordance from P1 scope entirely and keep only playback Replay, deferring session replay to a later iteration.
 - **Q6 Schema validation at boundaries -- resolved by the user (per requirements.md).** Implemented exactly as decided in "Runtime validation at boundaries (requirement 30)" above: one Owner_Validator per sibling-owned type, four Workbench-owned validators for the rest.
 - **[CONFIRM] Q7 Internationalisation.** Recommended default (per requirements.md): English only, every user-facing string centralised (this design centralises them in `shared/glossary/glossaryTerms.ts` for glossary terms and co-located `strings.ts` files per screen for the rest) so a later translation pass touches no component logic. No action needed unless the user wants i18n scaffolding now.
-- **[CONFIRM] Q8 Benchmark Lab tier.** Recommended default (per requirements.md): P1, because a committed report must exist first (the benchmark spec's own tasks phase). This design's component/wireframe work for `LabScreen` is complete so that P1 can start immediately once a report is committed; no P0 placeholder Lab is built.
+- **Q8 Benchmark Lab tier -- resolved by the user ("Benchmark Lab P1, essential results in P0").** The Results_Summary is P0 and reads `data/benchmark/browser/index.json` through the browser-safe reader; the full Lab is P1. See "Benchmark Lab Design".
 - **[CONFIRM] Q9 Trail_Screen tier.** Recommended default (per requirements.md): P1, with the credits control and Educational_Label staying P0 inside `Shell` (already designed that way above, independent of `TrailScreen` itself).
 - **[CONFIRM] Q10 Hosting.** Out of scope for this design; static hosting with no server, consistent with `tech.md`. No specific provider is named here.
+
+## Amendment record
+
+| # | Change | Source | Sections touched |
+|---|--------|--------|------------------|
+| 1 | Demo_Bundle redefined: `card.png` copied from detection's `data/samples/card-synthetic-sample.png`, a copy of `sample.meta.json` (`SampleMeta`), `context-deck.json`, `damagedCardIndex` and `imageDigest` in the manifest, `detection-result.json` and `approved-deck.json` regenerated from the real pipeline, a `placeholder` flag, and a release-build check that fails on any placeholder. The builder renders no image. | requirements.md amendment row 4; requirements 31.11, 31.12, 30.10 | Module layout; Demo Bundle; Runtime validation at boundaries (row h, manifest, `DEMO_BUNDLE_DIGEST_MISMATCH`) |
+| 2 | New section "Deck origin, attestation and deck context": digest check against manifest and `SampleMeta`, `syntheticAttestations` for the damaged card only, `deckOrigin: "synthetic"` on success and `real` with a stated reason on mismatch or placeholder, uploads always `real` with a named code path and enforcing tests, insertion of the detected card through the domain `insertCard` before restoration, the single-card statement for uploads, the Simulated_Demo_Badge and context-card labels. | Requirements 3.10, 5.10, 5.11, 31 | New section; Data flow for the P0 journey; Worker orchestration; Design Tokens (badge note); Wireframes (Start, Scan, Studio, Loom) |
+| 3 | `PriorGatePanel` moved to P0 with two cases (attested synthetic toggle with the Synthetic_Deck_Notice; real-deck recorded enablement with note and Synthetic_Prior_Warning), added to the component tree, contracts, Studio wireframe, sibling-calls table and P0 flow. P0 survival rule updated. | Requirements 2.7, 10.3 to 10.12 | Components and Interfaces; Wireframes; Interaction Contracts |
+| 4 | Results_Summary added as P0 (reads `data/benchmark/browser/index.json` through the browser-safe reader); Q8 resolved by the user's "Benchmark Lab P1, essential results in P0". | Requirements 18.20, 18.21 | Benchmark Lab Design; Wireframes; Component tree; Open questions |
+| 5 | Playwright journey extended with card insertion and turning a prior on; second upload-path test; origin, digest-mismatch, badge, placeholder and Boundary corrupted-input tests; Results_Summary test. | Requirements 28.14 to 28.16, 31.7 | Testing Strategy |
+| 6 | Reconciliation table extended (attestation types and inputs, `SYNTHETIC_DECK_NOTICE`, prior toggle and enablement, `insertCard`, `SampleMeta`, digest function, report path). Traceability rows updated to requirements 2.7, 3.10, 5.11, 10.12, 18.21, 28.16, 30.11, 31. Sibling amendments list: applied items (worker import rule, report path, attestation inputs, `SampleMeta`, `insertCard`) removed, domain marker items kept, one new item (vision index export of `sha256Hex`). | Plan batch A0 | Reconciliation table; Requirements Traceability; Amendments Needed in Sibling Specs |
+
+Numbering of existing sections is unchanged. `requirements.md` and `tasks.md` were not touched.

@@ -70,9 +70,12 @@ src/vision/
   client/                   detectionClient.ts
   __tests__/                generators.ts, synthetic/ (renderer, degradations), goldens/, *.test.ts
 src/workers/
-  detection.worker.ts       thin adapter, imports src/vision only
+  detection.worker.ts       thin adapter, imports the src/vision index (the only file of src/workers this feature owns; restoration.worker.ts belongs to the Workbench spec)
 scripts/
-  vision-spike.ts, vision-measure.ts, vision-eval-synthetic.ts, vision-eval-real.ts, vision-tune.ts
+  vision-spike.ts, vision-measure.ts, vision-eval-synthetic.ts, vision-eval-real.ts, vision-tune.ts,
+  vision-make-sample.ts     single producer of the bundled synthetic sample
+data/
+  samples/card-synthetic-sample.png, sample.meta.json, README.md   (written by vision-make-sample.ts)
 docs/
   vision-errors.md, vision-parameters.md, vision-methods.md, vision-measurements.md,
   vision-eval-synthetic.md, vision-eval-real.md
@@ -85,11 +88,11 @@ No new top-level folder is needed. `scripts` is already listed in `structure.md`
 ### Dependency rule and import-boundary test
 
 - `src/vision` imports `src/domain` (index only) and TypeScript built-ins. It never imports `src/ui`, `src/restore`, `src/benchmark`.
-- `src/workers/detection.worker.ts` imports `src/vision` only.
+- `src/workers` may import the public indexes of `src/vision`, `src/restore` and `src/domain` (as `structure.md` allows). It never imports `src/ui`, `src/benchmark`, or any module other than those three indexes. This feature owns only `src/workers/detection.worker.ts`, which imports the `src/vision` index. `src/workers/restoration.worker.ts` belongs to the Workbench spec and may import the `src/restore` index.
 - `src/domain` never imports `src/vision` or `src/workers`.
 - `src/vision/client` uses a caller-supplied `WorkerFactory`. It does not call `new Worker` itself, so `src/vision` has no DOM dependency except in the browser decoder.
 - Files under `src/vision` that produce a Detection_Result (everything except `intake/decoder.ts`, `client/`, `protocol/` adapters and `__tests__/`) must not use `document`, `window`, `fetch`, `XMLHttpRequest`, `Date`, `Math.random`, `performance.now`, `setTimeout`, `setInterval`. The one yield point the pipeline needs is injected (`PipelineHooks.yieldToEventLoop`).
-- The test `src/vision/__tests__/boundary.test.ts` scans all `.ts` files with the TypeScript compiler API (same technique as the domain test) and checks these rules, plus that `src/domain` contains no import of `src/vision`.
+- The test `src/vision/__tests__/boundary.test.ts` scans all `.ts` files with the TypeScript compiler API (same technique as the domain test) and checks these rules, plus that `src/domain` contains no import of `src/vision`. It also asserts that every import in `src/workers` resolves to the index of `src/vision`, `src/restore` or `src/domain`, and fails on an import of `src/ui`, `src/benchmark` or a deep (non-index) module path. A negative self-test feeds it a worker file with each forbidden import and expects a failure.
 
 ### Pipeline
 
@@ -755,6 +758,7 @@ export interface CardDetectionRecord {
   readonly format: "loom-lazarus-detection-record"; readonly schemaVersion: 1;
   readonly profileId: string; readonly profileVerification: Readonly<Record<string, VerificationStatus>>;
   readonly implementation: ImplementationStamp; readonly imageDigest: { algorithm: "sha-256"; hex: string };
+  readonly imageDigestText: string;                                    // same digest as "sha-256:<lowercase hex>", the canonical text form across spec boundaries
   readonly resultId: string; readonly alignment: AlignmentStatus; readonly polarity: PolarityAssumption;
   readonly restorationConfidenceNote: string;                          // states that every cell has restorationConfidence null = not evaluated; only restoration assigns a number
   readonly holeProbabilityCalibration: "uncalibrated" | { readonly benchmarkRef: string };
@@ -914,7 +918,27 @@ Rules:
 - Everything runs in the browser. There is no upload code. The Detection_Result contains no pixels of the Original_Image: it holds `imageDigest`, dimensions and byte length only.
 - The Original_Image bytes are held by the caller. The client sends a copy. The pipeline never mutates its input (`Uint8Array` is not written to). `imageDigest` is recomputed on the caller's buffer after the run in tests and compared (Property 17).
 - The Input_Image is not persisted to browser storage unless the caller asks. This feature has no storage code.
-- No user photo is committed. The bundled sample comes from `data/` with a README stating source and licence. If no licensed real photo is available, the sample is synthetic and says so. The Garín5 licence is checked before any redistribution (A10, D10).
+- No user photo is committed. The bundled sample comes from `data/samples/` with a README stating source and licence. If no licensed real photo is available, the sample is synthetic and says so. The Garín5 licence is checked before any redistribution (A10, D10).
+
+**Bundled sample producer.** `scripts/vision-make-sample.ts` is the single producer of the bundled synthetic card image `data/samples/card-synthetic-sample.png`. It is a thin script over `renderSyntheticCard` (test-support code, used only by scripts). The Workbench Demo_Bundle builder copies the committed file and never renders its own image. The script writes `data/samples/sample.meta.json` beside the image:
+
+```ts
+export interface SampleMeta {
+  readonly format: "loom-lazarus-sample-meta";
+  readonly schemaVersion: 1;
+  readonly generator: string;                 // for example "loom-lazarus-synthetic-card-renderer"
+  readonly generatorVersion: string;
+  readonly sourceId: string;                  // stable id of the sample, for example "garin-profile-synthetic-001"
+  readonly seed: number;
+  readonly parametersDigest: string;          // "sha-256:<lowercase hex>" over the canonical JSON of the SyntheticSpec (profile id, damage parameters, size, polarity)
+  readonly imageDigest: string;               // "sha-256:<lowercase hex>", computed with the same sha256Hex function as Image_Digest, over the PNG bytes
+  readonly orientation: Orientation;          // recorded, user-supplied orientation for the unverified Garín profile (see Q5)
+  readonly profileId: string;
+  readonly synthetic: true;
+}
+```
+
+These fields are the inputs a restoration Synthetic_Image_Attestation needs (`generator`, `generatorVersion`, `sourceId`, `seed`, `parametersDigest`, `imageDigest`), usable without translation. The string form `<algorithm>:<lowercase hex>` (for example `sha-256:ab12...`) is the canonical text form of an Image_Digest wherever it crosses a spec boundary. Both digests in `SampleMeta` use sha-256 so they share this one documented format. The Detection_Result stores Image_Digest as an object (`{ algorithm, hex }`), so `CardDetectionRecord` also exposes the same string form (`imageDigestText`), and restoration compares strings: the attestation `imageDigest` must equal `imageDigestText` of the evidence. `sample.meta.json` is a declaration by the generator, not proof. Detection never reads it to decide anything. The Workbench consumes it only for this committed asset, after checking that `imageDigest` equals the digest of the file it loads, and never for an uploaded image. A test recomputes the image digest through the detection digest function and compares it with the metadata, and a second run of the script gives byte-identical image and metadata.
 - A Playwright test blocks every non-same-origin request, runs a detection on the bundled sample and asserts completion and that no request carried image data (Req 18.3).
 
 ### Evaluation, synthetic generator and reporting (Req 21)
@@ -1745,3 +1769,9 @@ Targeted amendment, made to match the amended `requirements.md` of this spec (it
 - **Open item Q6.** The `scripts` folder is already in `structure.md`, so that part is closed. Q6 now covers only the dev-only image codec.
 - **Later specs.** The benchmark is the fourth spec and the UI the fifth. The UI consumes the benchmark's `BrowserReport` files.
 - **Traceability.** Rows for 21.3 to 21.5, 21.8, 21.11, 21.12 and 22.1 updated.
+
+Targeted amendment (docs/PLAN.md findings C-05, C-06, C-18; batch items A0-2, A0-5, A0-9). Numbering is unchanged. `requirements.md` and `tasks.md` are not edited here and need matching edits in their own workflow (task 1.3 boundary rule, task 28.1 sample metadata).
+
+- **Worker import rule (A0-2).** `src/workers` may import the public indexes of `src/vision`, `src/restore` and `src/domain`, matching `structure.md`. Detection owns only `src/workers/detection.worker.ts`. `restoration.worker.ts` belongs to the Workbench spec. The boundary test still forbids imports of `src/ui`, `src/benchmark` and non-index modules from `src/workers`, with a negative self-test.
+- **Single sample producer (A0-5).** `scripts/vision-make-sample.ts` is the only producer of `data/samples/card-synthetic-sample.png`. The Workbench Demo_Bundle builder copies it and renders no image of its own. Module layout lists the script and `data/samples/`.
+- **Sample metadata (A0-9).** `data/samples/sample.meta.json` (`SampleMeta`) carries `generator`, `generatorVersion`, `sourceId`, `seed`, `parametersDigest`, `imageDigest` (same `sha256Hex` as Image_Digest) and the recorded orientation. Both digests are strings written `"sha-256:<lowercase hex>"`, the canonical text form of an Image_Digest across spec boundaries, so restoration can use them as a `SyntheticImageAttestation` without translation. `CardDetectionRecord.imageDigestText` exposes the same form for the evidence image. It is a generator declaration, consumed by the Workbench only for this committed asset.

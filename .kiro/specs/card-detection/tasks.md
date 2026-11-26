@@ -4,7 +4,7 @@
 
 This plan implements the Card_Detector in `src/vision`, with a thin worker adapter in `src/workers`, as strict TypeScript with Vitest, fast-check and Playwright, following `design.md`. It builds on the approved `card-domain-and-loom-engine` contract and imports `src/domain` only through its index.
 
-Prerequisite: the `card-domain-and-loom-engine` library (at least its interface freeze, core deck work and `index.ts`) exists in `src/domain`. Tasks 10, 15 and every task that builds a Deck or Profile need it. If its scaffold (`package.json`, `tsconfig.json`, Vitest config) is missing, task 1.2 creates the minimum needed and does not duplicate files the domain already owns.
+Prerequisite: the `card-domain-and-loom-engine` library (at least its interface freeze, core deck work and `index.ts`) exists in `src/domain`. Tasks 10, 15 and every task that builds a Deck or Profile need it. The project scaffold (`package.json`, `tsconfig*.json`, Vite, Vitest and `playwright.config.ts`, with every script pre-registered and the Node-test image codec chosen) is created by the integrator at milestone M0. No detection task creates or edits those files. Task 1.2 only verifies them.
 
 The plan is ordered so that interfaces come first:
 
@@ -50,17 +50,18 @@ Conventions for every task:
     - Files owned: none (verification only).
     - _Requirements: 18.5, 21.7_
 
-  - [ ] 1.2 Scaffold `src/vision`, `src/workers`, scripts entries and dev dependencies
+  - [ ] 1.2 Scaffold `src/vision` and `src/workers`, and verify integrator-owned configuration
     - Create the `src/vision` folder skeleton from the design's module layout (empty `index.ts` placeholder, `__tests__/`, `__tests__/support/`, `__tests__/synthetic/`, `__tests__/goldens/`, `__tests__/fixtures/`, `__tests__/browser/`) and `src/workers/`.
-    - Choose and add a dev-only PNG, JPEG and WebP codec set for Node tests (check licence and size; choose after comparing at least two options) and Playwright. Record the choice, versions and licences in `docs/vision-dev-dependencies.md`. No production code imports them.
-    - Pre-register every npm script in `package.json` now so later workers never edit it: `vision:spike`, `vision:measure`, `vision:compare-envs`, `vision:eval:synthetic`, `vision:eval:real`, `vision:tune`, `vision:make-sample`, `vision:golden:update`, `test:browser`.
+    - Do not edit `package.json`, `tsconfig*.json`, the Vite or Vitest configuration or `playwright.config.ts`, and do not add dependencies. The integrator creates them at milestone M0 with every script pre-registered (`vision:spike`, `vision:measure`, `vision:compare-envs`, `vision:eval:synthetic`, `vision:eval:real`, `vision:tune`, `vision:make-sample`, `vision:golden:update`, `test:browser`) and the chosen dev-only PNG, JPEG and WebP codec set for Node tests.
+    - Verify that those files, the nine scripts and the codec dependency exist. If anything is missing, stop and request the change from the integrator instead of editing.
+    - `docs/vision-dev-dependencies.md` records the codec decision made at M0 (options compared, versions, licences, size). No production code imports the codec.
     - Create `src/vision/__tests__/seeds.ts` with `SEED_P1` to `SEED_P29` (`20260200 + n`) and `SEED_GOLDEN = 20260300`. Reuse or mirror the domain's `deepFreeze` and `cloneBefore` helpers in `src/vision/__tests__/helpers.ts`.
-    - Files owned: `package.json` (scripts and dev dependencies only), `docs/vision-dev-dependencies.md`, `src/vision/__tests__/seeds.ts`, `src/vision/__tests__/helpers.ts`, folder skeleton.
+    - Files owned: `docs/vision-dev-dependencies.md`, `src/vision/__tests__/seeds.ts`, `src/vision/__tests__/helpers.ts`, folder skeleton.
     - _Requirements: 17.9, 18.5, 22.1, 22.3_
 
   - [ ] 1.3 Write the import-boundary test
     - Create `src/vision/__tests__/boundary.test.ts` using the TypeScript compiler API over every `.ts` file in `src/vision`, `src/workers` and `src/domain`.
-    - Fail if a file in `src/vision` imports `src/ui`, `src/restore`, `src/benchmark`, or `src/domain` by any path other than its index. Fail if `src/domain` imports `src/vision` or `src/workers`. Fail if `src/workers` imports anything other than `src/vision` (index) and `src/domain` (index). Fail if production code imports from `__tests__`.
+    - Fail if a file in `src/vision` imports `src/ui`, `src/restore`, `src/benchmark`, or `src/domain` by any path other than its index. Fail if `src/domain` imports `src/vision` or `src/workers`. Fail if `src/workers` imports anything other than the public indexes of `src/vision`, `src/restore` and `src/domain`; in particular it must not import `src/ui`, `src/benchmark` or any non-index module. Detection owns only `src/workers/detection.worker.ts` (task 25) and its adapter; `src/workers/restoration.worker.ts` belongs to the Workbench spec. Fail if production code imports from `__tests__`.
     - Fail on the forbidden identifiers listed in Conventions in any file under `src/vision` that produces a Detection_Result, with the exception list in Conventions.
     - Add a negative self-test that feeds an in-memory violating source and expects failure.
     - Files owned: `src/vision/__tests__/boundary.test.ts`.
@@ -96,7 +97,7 @@ Conventions for every task:
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.11, 12.16, 12.17, 12.20_
 
   - [ ] 2.6 Define the mapping types
-    - Create `mapping/types.ts`: `MapOptions`, `MappedDetection`, `CardDetectionRecord`, `UserConditionOverride`, `AssistantEvidence` reference. `CardDetectionRecord` includes `restorationConfidenceNote`, `holeProbabilityCalibration`, `perCell`, `appliedCorrections`, `userConditionOverrides`, `notApplied`, `assistantEvidence`.
+    - Create `mapping/types.ts`: `MapOptions`, `MappedDetection`, `CardDetectionRecord`, `UserConditionOverride`, `AssistantEvidence` reference. `CardDetectionRecord` includes `imageDigestText`, `restorationConfidenceNote`, `holeProbabilityCalibration`, `perCell`, `appliedCorrections`, `userConditionOverrides`, `notApplied`, `assistantEvidence`.
     - Files owned: `src/vision/mapping/types.ts`.
     - _Requirements: 10.1, 10.7, 10.12, 10.13, 10.14, 19.5_
 
@@ -318,7 +319,7 @@ Conventions for every task:
 - [ ] 10. Observation_Mapper (Crew-delegable, Group B)
   - Depends on: tasks 3, 6, and the domain library (core deck work). Files owned: `src/vision/mapping/detectionRecord.ts`, `applyCorrections.ts`, `observationMapper.ts`, and the test files below.
   - [ ] 10.1 Implement the card-level detection record builder
-    - Build `CardDetectionRecord`: profile id and verification markers, Implementation_Stamp, Image_Digest, `resultId`, alignment, polarity, `restorationConfidenceNote` (states that every cell has `restorationConfidence: null` meaning not evaluated and that only restoration assigns a number), `holeProbabilityCalibration`, `perCell` (condition, probability, unknown reason, patch id, finding ids), `appliedCorrections`, `userConditionOverrides` (one entry per targeted `readIndex`, ordered by `readIndex` then sequence, derived from the layer only), `notApplied`, `assistantEvidence`, finding ids and unknown-region count.
+    - Build `CardDetectionRecord`: profile id and verification markers, Implementation_Stamp, Image_Digest, `imageDigestText` (the same digest as the string `"<algorithm>:<lowercase hex>"`, for example `sha-256:ab12...`, which restoration compares with a sample attestation), `resultId`, alignment, polarity, `restorationConfidenceNote` (states that every cell has `restorationConfidence: null` meaning not evaluated and that only restoration assigns a number), `holeProbabilityCalibration`, `perCell` (condition, probability, unknown reason, patch id, finding ids), `appliedCorrections`, `userConditionOverrides` (one entry per targeted `readIndex`, ordered by `readIndex` then sequence, derived from the layer only), `notApplied`, `assistantEvidence`, finding ids and unknown-region count.
     - Files owned: `src/vision/mapping/detectionRecord.ts`.
     - _Requirements: 10.5, 10.7, 10.11, 10.12, 10.13, 10.14, 19.5_
 
@@ -821,21 +822,29 @@ Conventions for every task:
     - _Requirements: 8.8, 21.2, 21.3, 21.7, 21.11, 21.12_
 
 - [ ] 28. Bundled sample and browser tests (Crew-delegable, Group E)
-  - Depends on: tasks 15, 23, 25. Files owned: `scripts/vision-make-sample.ts`, `data/samples/*`, `playwright.config.ts`, `src/vision/__tests__/browser/*`, and the test file below.
+  - Depends on: tasks 15, 23, 25. Files owned: `scripts/vision-make-sample.ts`, `data/samples/*`, `src/vision/__tests__/browser/*`, `src/vision/__tests__/sampleMeta.test.ts`, and the test file below. `playwright.config.ts` belongs to the integrator.
   - [ ] 28.1 Generate the bundled sample
-    - `scripts/vision-make-sample.ts` renders a synthetic Garín-profile card photograph and writes `data/samples/card-synthetic-sample.png` plus `sample.meta.json` with the recorded, user-supplied orientation (Q5) and the parameters used. `data/samples/README.md` states that the sample is synthetic, MIT licensed, contains no real photograph and that the Garín5 dataset has not been redistributed.
+    - `scripts/vision-make-sample.ts` renders a synthetic Garín-profile card photograph and writes `data/samples/card-synthetic-sample.png` plus `sample.meta.json`. This script is the single producer of the sample image. The Workbench Demo_Bundle builder copies it and renders no image of its own.
+    - `sample.meta.json` follows `SampleMeta` from the design: `format` `loom-lazarus-sample-meta`, `schemaVersion` 1, `generator`, `generatorVersion`, `sourceId`, `seed`, `parametersDigest` and `imageDigest` (both written `"sha-256:<lowercase hex>"`; `parametersDigest` over the canonical JSON of the synthetic spec, `imageDigest` over the PNG bytes with the same `sha256Hex` as Image_Digest), the recorded user-supplied `orientation` (Q5), `profileId` and `synthetic: true`. It is a generator declaration, not proof, and detection never reads it to decide anything.
+    - `data/samples/README.md` states that the sample is synthetic, MIT licensed, contains no real photograph and that the Garín5 dataset has not been redistributed.
     - Files owned: `scripts/vision-make-sample.ts`, `data/samples/card-synthetic-sample.png`, `data/samples/sample.meta.json`, `data/samples/README.md`.
     - _Requirements: 18.5, 21.7_
 
   - [ ] 28.2 Add the minimal browser test harness
-    - A bare page under `src/vision/__tests__/browser/` that creates the worker through `createDetectionClient`, loads the bundled sample and exposes run, cancel and result hooks to Playwright. Configure `playwright.config.ts` for headless Chromium with a Vite server for the harness. This is a test fixture, not product UI.
-    - Files owned: `playwright.config.ts`, `src/vision/__tests__/browser/*`.
+    - A bare page under `src/vision/__tests__/browser/` that creates the worker through `createDetectionClient`, loads the bundled sample and exposes run, cancel and result hooks to Playwright. This is a test fixture, not product UI.
+    - `playwright.config.ts` is owned by the integrator (milestone M0). If the harness needs a configuration change (headless Chromium, Vite server for the harness page), request it from the integrator and do not edit the file.
+    - Files owned: `src/vision/__tests__/browser/*` (harness files only).
     - _Requirements: 13.14, 18.3_
 
   - [ ]* 28.3 Write the Playwright tests
     - Privacy: all non-same-origin requests blocked, the run completes, no request body carries image data, offline variant after assets load. Lazy load: no backend request before the first run, same-origin only. Main thread: longest task during a run under the design budget, `PerformanceObserver` `longtask` entries and a `requestAnimationFrame` gap sampler, reporting the longest task and the count of tasks of 50 ms or more. Cancellation: `cancel` posted at 20 seeded delays, min, median, p95 and max latency to `CANCELLED` reported against the 250 ms budget.
     - Files owned: `src/vision/__tests__/browser/vision.browser.spec.ts`.
     - _Requirements: 13.6, 13.14, 17.2, 17.3, 17.9, 18.1, 18.2, 18.3_
+
+  - [ ]* 28.4 Write the sample metadata tests
+    - Recompute the image digest from `data/samples/card-synthetic-sample.png` through the detection digest function (`sha256Hex`) and compare the string form `"sha-256:<lowercase hex>"` with `imageDigest` in `sample.meta.json`. Validate every `SampleMeta` field, including both digest string formats. Run `vision-make-sample` twice and assert byte-identical image and metadata. Assert `imageDigestText` of a detection record for the sample equals `imageDigest`.
+    - Files owned: `src/vision/__tests__/sampleMeta.test.ts`.
+    - _Requirements: 15.1, 21.7, 22.3_
 
 - [ ] 29. Performance and cross-environment measurement scripts (Crew-delegable, Group E)
   - Depends on: tasks 23, 28.1. Files owned: `scripts/vision-measure.ts`, `scripts/vision-compare-envs.ts`, `docs/vision-measurements.md`, and the test file below.
@@ -912,11 +921,13 @@ Conventions for every task:
 | 25 | E | 12, 23 | `src/workers/*` |
 | 26 | E | 9, 10, 11, 23 | goldens, corpus, cross-cutting property tests, `scripts/vision-golden-update.ts` |
 | 27 | E | 14, 23 (soft: benchmark runner, stub until available) | `scripts/vision-eval-synthetic.ts`, `scripts/vision-eval-real.ts`, `scripts/vision-tune.ts`, `__tests__/evalHarness.test.ts` |
-| 28 | E | 15, 23, 25 | sample script and data, `playwright.config.ts`, browser harness and spec |
+| 28 | E | 15, 23, 25 | sample script and data, browser harness and spec, `sampleMeta.test.ts` (`playwright.config.ts` is the integrator's) |
 | 29 | E | 23, 28.1 | `scripts/vision-measure.ts`, `scripts/vision-compare-envs.ts`, measurements doc |
 | 30 | E (optional) | 23, 28.1 | `scripts/vision-spike.ts`, spike doc, optional OpenCV.js backend |
 
-- Each Crew task owns its tests and edits no file owned by another task. Shared generator files are split by owner so no two workers touch one file. `package.json` is edited only in task 1.2, which pre-registers every script name.
+- Each Crew task owns its tests and edits no file owned by another task. Shared generator files are split by owner so no two workers touch one file. `package.json`, `tsconfig*.json`, the Vite and Vitest configuration and `playwright.config.ts` are edited only by the integrator (created at milestone M0 with every script pre-registered). A worker that needs a change requests it from the integrator.
+- Tier 2 couplings: if task 27 (evaluation wrapper scripts) is not built, benchmark task 24.3 is skipped. If task 9 (manual-correction service) is not built, the Workbench manual alignment (its task 21) is skipped.
+- `src/workers/restoration.worker.ts` belongs to the Workbench spec. Detection owns only `src/workers/detection.worker.ts` (and its adapter). `CardDetectionRecord.imageDigestText` is implemented in task 10.1, and the sample metadata (`SampleMeta`) in task 28.1.
 - If a Crew worker finds that a frozen signature must change, it stops and reports so the spec can be updated.
 - Benchmark ownership: `data/synthetic/damage-levels.json` (damage levels, the per-Cell_Window Occlusion_Cover_Fraction with initial value 0.9 marked `initial-unconfirmed` until benchmark experiment E-2, and the per-level `occlusionCoverage`) belongs to the benchmark spec. Detection reads it as data through `loadDamageLevels` (task 15.3), never creates or edits it, never imports `src/benchmark` from `src/vision`, and has no placeholder file or fallback. Task 23.10 reads the fraction from this reader and fixes no value.
 - Official detection numbers come from the benchmark runner. The three scripts of task 27 are thin wrappers that stay stubs with a clear error until the benchmark runner exists, so no detection task blocks on the benchmark spec. The Deck_Family Split_Roles supersede the old seed blocks for official reports, and `scripts/vision-tune.ts` reads only the `tuning` role.
@@ -960,7 +971,7 @@ Conventions for every task:
     { "id": 25, "tasks": ["25.1", "26.1", "26.2", "26.3", "26.4", "26.5", "26.7", "27.1", "27.2", "27.3", "28.1", "30.1"] },
     { "id": 26, "tasks": ["25.2", "26.6", "27.4", "29.1", "29.2", "30.2"] },
     { "id": 27, "tasks": ["25.3", "28.2", "29.3", "30.3"] },
-    { "id": 28, "tasks": ["28.3", "31.2"] },
+    { "id": 28, "tasks": ["28.3", "28.4", "31.2"] },
     { "id": 29, "tasks": ["31.1"] },
     { "id": 30, "tasks": ["32"] }
   ]

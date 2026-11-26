@@ -25,12 +25,13 @@ Conventions for every task:
 ## Tasks
 
 - [ ] 1. Project scaffold and shared primitives
-  - [ ] 1.1 Create the TypeScript, Vitest and fast-check scaffold
-    - Add `package.json`, strict `tsconfig.json` and Vitest configuration with scripts `test` (`vitest --run`) and `typecheck`; add dependencies `typescript`, `vitest`, `fast-check`.
+  - [ ] 1.1 Create the domain skeleton and verify the integrator's scaffold
+    - Do not create `package.json`, `tsconfig.json` or the Vitest configuration. The integrator creates them at milestone M0 for all five specs, with scripts `test` (`vitest --run`) and `typecheck`, dependencies `typescript`, `vitest` and `fast-check`, and the scripts of every other spec.
+    - Verify the integrator's scaffold has what the domain needs: strict TypeScript, `vitest --run` discovering `src/domain/**/__tests__`, the `typecheck` script, and `typescript`, `vitest` and `fast-check` as dependencies. If anything is missing, ask the integrator for the change; do not edit those files.
     - Create the `src/domain` folder skeleton from the design's module layout and `src/domain/__tests__/`.
     - Create `src/domain/__tests__/seeds.ts` with distinct seed constants `20260101` to `20260129` named `SEED_P1` to `SEED_P29` (`20260100 + n`; P25 to P29 are the withdrawal properties).
     - Create a `deepFreeze` and `cloneBefore` test helper in `src/domain/__tests__/helpers.ts` used to detect input mutation.
-    - Files owned: `package.json`, `tsconfig.json`, Vitest config, `src/domain/__tests__/seeds.ts`, `src/domain/__tests__/helpers.ts`.
+    - Files owned: `src/domain/__tests__/seeds.ts`, `src/domain/__tests__/helpers.ts`, and the `src/domain` folder skeleton. Config files (`package.json`, `tsconfig.json`, Vitest config) are owned by the integrator.
     - _Requirements: 13.1, 13.3, 16.3_
 
   - [ ] 1.2 Write the import-boundary test

@@ -1,4 +1,4 @@
-# Implementation Plan: Restoration Engine
+﻿# Implementation Plan: Restoration Engine
 
 ## Overview
 
@@ -12,7 +12,7 @@ The plan is ordered so that interfaces come first:
 - **Group D (tasks 19 and 20):** the engine integration and the review service. Each is one worker and is not split.
 - **Group E (tasks 21, 22, 24 to 26):** stretch whole-card recovery, offline scripts, goldens, regression examples, final guards and integration.
 
-Out of scope here (other specs): the React UI (spec 4), the benchmark harness, damage models and accuracy targets (spec 5), image detection, within-card periodicity detection, and any learned or LLM-based restoration.
+Out of scope here (other specs): the React UI (spec 5), the benchmark harness, damage models and accuracy targets (spec 4), image detection, within-card periodicity detection, and any learned or LLM-based restoration.
 
 Approved decisions reflected here:
 - **Q1:** reversal of an accepted or selected inference uses the domain `withdrawInference`, once per region cell, after an all-cells pre-check. `undoEdit` is used only for `edit-cell`.
@@ -48,9 +48,9 @@ Conventions for every task:
 
   - [ ] 1.2 Scaffold `src/restore`, seeds and shared test helpers
     - Create the `src/restore` skeleton from the design's module layout (placeholder `index.ts`, `__tests__/`, `__tests__/generators/`, `__tests__/golden/`).
-    - Create `src/restore/__tests__/seeds.ts` with `SEED_P1` to `SEED_P25` (`20260500 + n`, so P23 to P25 are 20260523 to 20260525) and `SEED_GOLDEN = 20260600`. The block start is still subject to the Q8 confirmation in task 27. Create `src/restore/__tests__/helpers.ts` reusing or mirroring the domain `deepFreeze` and `cloneBefore` helpers, plus `stripOpaqueLabels(record)` used by every equality and determinism comparison.
-    - Pre-register the npm scripts `restore:tune` and `restore:golden:update` in `package.json` now so that later workers never edit it. Reuse the existing TypeScript, Vitest and fast-check configuration from the domain scaffold and do not duplicate it.
-    - Files owned: `package.json` (scripts only), `src/restore/__tests__/seeds.ts`, `src/restore/__tests__/helpers.ts`, folder skeleton.
+    - Create `src/restore/__tests__/seeds.ts` with `SEED_P1` to `SEED_P27` (`20260500 + n`, so P23 to P27 are 20260523 to 20260527) and `SEED_GOLDEN = 20260600`. The seed block start 20260500 is settled. Create `src/restore/__tests__/helpers.ts` reusing or mirroring the domain `deepFreeze` and `cloneBefore` helpers, plus `stripOpaqueLabels(record)` used by every equality and determinism comparison.
+    - Verify that the integrator's milestone M0 files exist: `package.json` with every script pre-registered (including `restore:tune` and `restore:golden:update`), `tsconfig*.json`, and the Vite, Vitest and Playwright configs. This task does not create or edit any of them. If a script or config is missing or needs a change, stop and ask the integrator for it.
+    - Files owned: `src/restore/__tests__/seeds.ts`, `src/restore/__tests__/helpers.ts`, folder skeleton.
     - _Requirements: 19.2, 25.1, 25.3_
 
   - [ ] 1.3 Write the import-boundary test
@@ -65,41 +65,46 @@ Conventions for every task:
 - [ ] 2. Interface definitions
   - [ ] 2.1 Define `RestorationResult`, the error registry and limits
     - Create `result.ts`: `RestorationResult`, `RestorationError` (code, message, path, `domainCode`), `RESTORATION_ERROR_CODES` tuple (all codes in Req 22.1 plus `NO_POLARITY_RECORDED` and the amendment codes `ROLE_NOT_PERMITTED_FOR_TUNING` (Req 26.3), `FILE_SET_OVERLAP` (Req 26.4) and `SPLIT_ROLE_MISMATCH` (Req 26.7); `UNKNOWN_FIELD` is already in the list and also serves Req 26.6), derived `RestorationErrorCode`, `RESTORATION_ERROR_MESSAGES` with a stable message per code, `ABSTENTION_REASONS` tuple (Req 22.2) with `ABSTENTION_MESSAGES`, `ok`/`err` helpers, and `wrapDomainError` that maps a domain error to `DOMAIN_RULE_REJECTED` with `domainCode`, `path` and `message` copied. Do not extend the domain `ErrorCode` union.
+    - Attestation: export `SYNTHETIC_DECK_NOTICE = "Measured on synthetic data. This says nothing about historical cards."` from `limits.ts` (frozen text, used by explanations and tests). No new error code is added: every attestation failure is `INVALID_CONFIGURATION` (Req 3.26).
     - Create `limits.ts`: `RESTORATION_LIMITS` (3 hypotheses per region, 1,000 explanation characters, 1,000 note characters, domain ceiling 10,000 cards) and `SYNTHETIC_PRIOR_WARNING_TEXT` ("Warning: this prior was derived from synthetic data and has not been validated on historical cards.").
     - Files owned: `src/restore/result.ts`, `src/restore/limits.ts`.
     - _Requirements: 3.18, 20.2, 20.3, 22.1, 22.2, 22.3, 22.6, 26.3, 26.4, 26.6, 26.7_
 
   - [ ] 2.3 Define the model types: cells, regions, hypotheses, priors and calibration
     - `types/cell.ts` (types only: `CellRef`, `AppliedOverrideLike`, predicate signatures declared in the stubs task), `types/hypothesis.ts` (`Hypothesis` with `values: ReadonlyMap<number, Bit>`, `Alternative`, `AbstentionReasonCode`, `Abstention`, `EvidenceItem`, `CalibrationStatus`, `rawConfidence`, `syntheticPriorWarning`, optional `stretch`), `types/priors.ts` (`StructuralPriorKind`, `SymmetryAxisKind`, `PriorMeasurement` with the required fields `datasetVersion` and `splitRole: "tuning" | "calibration"`, `PriorGateState`, `DeckOrigin`, `SyntheticPriorEnablementEntry`), `types/calibration.ts` (`CalibrationRecord` with `calibrationRole: "calibration"`, `tuningRole: "tuning"`, `calibrationFileSetIds`, `tuningFileSetIds`, `datasetVersion`, an optional `expectedCalibrationError` carrying `measuredOnRole: "tuning" | "held-out" | "test"` (never `calibration`), `validPriorKinds`, `validSupportRange` and the histogram-binning mapping entries). Add `BenchmarkSplitRole`, `TuningPurpose` and `FileSetRef` to `types/priors.ts` for the tuning modules.
+    - Attestation: in `types/priors.ts` add `SyntheticImageAttestation` (fields `generator`, `generatorVersion`, `sourceId`, `seed`, `parametersDigest`, `imageDigest`, as in the design) and `SyntheticAttestationRef` (`cardId`, `sourceId`, `imageDigest`, the per-card reference copied into outputs). Add optional `attestationRefs?: readonly SyntheticAttestationRef[]` to `Hypothesis` (`types/hypothesis.ts`) and to `PriorGateState`. In `types/calibration.ts` add `CalibrationRecord.scope` (`"synthetic" | "real"`, as in the design).
     - Reuse domain types by name (`Bit`, `Provenance`, `ActionId`, `SequenceNumber`); add a compile-time test (`// @ts-expect-error`) that a `Hypothesis` cannot carry provenance `observed`.
     - Files owned: `src/restore/types/cell.ts`, `hypothesis.ts`, `priors.ts`, `calibration.ts`, `src/restore/__tests__/modelTypes.test.ts`.
     - _Requirements: 3.4, 8.7, 10.5, 10.8, 12.2, 26.2_
 
   - [ ] 2.2 Define inputs, configuration and the masking contract
     - `types/inputs.ts`: `DetectionEvidenceInput` (structural, no `src/vision` import, field list as in the design), `Condition`, `RestorationInput`, `RestorationConfig` (all fields with documented ranges in TSDoc), `StructuralPriorKind` re-export. `RestorationInput` and every type it references declare no field that can carry a Ground_Truth_Value, a truth Deck or an evaluation label.
+    - Attestation: add the optional `syntheticAttestations?: ReadonlyMap<string, SyntheticImageAttestation>` field to `RestorationInput` (keyed by `cardId`, absent or empty for `deckOrigin` `real`), with TSDoc stating that `src/restore` never constructs an attestation and that the declaration is the caller's, not proof.
     - Add the masking-contract types for benchmark use (`MaskedCellSpec`) and document in TSDoc that a masked cell is a Raw_Observation without value and provenance `ambiguous`.
     - Files owned: `src/restore/types/inputs.ts`.
     - _Requirements: 1.1, 1.5, 19.4, 19.7, 20.1, 23.3_
 
   - [ ] 2.4 Define the record, review, state and audit types
+    - Attestation: `RestorationRecord` gains `deckOrigin` and an optional per-card `syntheticAttestations` list in deck order (each entry led by `cardId`, omitted when empty), placed after `syntheticPriorEnablements` and before `lastEntrySequence`.
     - `types/record.ts` (`RawObservationCopy`, `RunSection`, `Diagnostic`, `RestorationRecord` with the single shared `lastEntrySequence` counter), `types/review.ts` (`ReviewActionKind`, `ReviewOutcome`, `ReviewActionInput`, `RestorationState`), `types/audit.ts` (`AuditEntry`, `OpaqueTimestampLabel` as a plain string with a documented cap).
     - Files owned: `src/restore/types/record.ts`, `review.ts`, `audit.ts`.
     - _Requirements: 12.2, 12.5, 12.8, 14.1, 15.1, 17.1, 17.3_
 
   - [ ] 2.5 Define the Evidence Mode and heatmap view types
+    - Attestation: `EvidenceView` and `ConfidenceHeatmapEntry` carry `deckOrigin` and `attestationRefs` (`SyntheticAttestationRef[]`).
     - `types/view.ts`: `EvidenceView`, `ConfidenceHeatmapEntry` (`confidence: number | null`), `ConfidenceHeatmapData` (separate `holeProbabilityLayer`, `deckLevelSyntheticWarning`). No rendering, colour or pixel field.
     - Files owned: `src/restore/types/view.ts`.
     - _Requirements: 18.1, 18.3, 18.7, 18.8, 18.9, 18.10, 18.12, 18.14_
 
   - [ ] 2.6 Declare signature stubs for every remaining module
     - In each file below, export the final function signatures from the design with TSDoc listing the `RestorationError` codes. Bodies call a temporary `notImplemented()` helper in `src/restore/_stub.ts`.
-    - Files: `types/cell.ts` predicates (`isProtectedCell`, `isTargetCell`, `isTrustedCell`), `config/validate.ts`, `config/defaults.ts`, `determinism/ordering.ts`, `determinism/leakageGuard.ts`, `inference/trustedCells.ts`, `regions/segment.ts`, `gating/priorGate.ts`, `calibration/apply.ts`, `calibration/validate.ts`, `inference/{repeat,symmetry,imageEvidence,combine,explain,rank,wholeCard,engine}.ts`, `record/{build,serialize}.ts`, `review/{stateMachine,domainWrite,approval,undo,service}.ts`, `evidence/{evidenceView,heatmap}.ts`, `tuning/roles.ts` (`permitTuningRole`, `checkFileSetsDisjoint`) and `tuning/datasetFormat.ts` (`MinimalDatasetFile`, `importMinimalDataset(text, suppliedRole)`). The two tuning stubs are pure signatures with no file or clock access.
+    - Files: `types/cell.ts` predicates (`isProtectedCell`, `isTargetCell`, `isTrustedCell`), `config/validate.ts` (including `validateSyntheticAttestation` and `validateOriginAndAttestation`), `config/defaults.ts`, `determinism/ordering.ts`, `determinism/leakageGuard.ts`, `inference/trustedCells.ts`, `regions/segment.ts`, `gating/priorGate.ts`, `calibration/apply.ts`, `calibration/validate.ts`, `inference/{repeat,symmetry,imageEvidence,combine,explain,rank,wholeCard,engine}.ts`, `record/{build,serialize}.ts`, `review/{stateMachine,domainWrite,approval,undo,service}.ts`, `evidence/{evidenceView,heatmap}.ts`, `tuning/roles.ts` (`permitTuningRole`, `checkFileSetsDisjoint`) and `tuning/datasetFormat.ts` (`MinimalDatasetFile`, `importMinimalDataset(text, suppliedRole)`). The two tuning stubs are pure signatures with no file or clock access.
     - Stubs carry the final contract: `runInference` is pure and takes only a `RestorationInput`; `applyAcceptedHypothesis` takes one `setInferred` call per cell with Action_Id `"<actionId>#<cardId>#<readIndex>"`; `undoReviewAction` documents the all-cells pre-check; no stub accepts a ground-truth value.
     - `_stub.ts` is temporary. Task 26.1 asserts that nothing imports it and deletes it.
     - _Requirements: 13.1, 13.3, 17.6b, 19.4, 22.6, 23.1, 26.1, 26.3_
 
   - [ ] 2.7 Create the public index, interface version and domain-version check
-    - Create `src/restore/index.ts` as the single export surface re-exporting every type, function and constant named in the design, plus the tuning functions and types (`permitTuningRole`, `checkFileSetsDisjoint`, `importMinimalDataset`, `MinimalDatasetFile`, `BenchmarkSplitRole`, `TuningPurpose`, `FileSetRef`) so that the script and the benchmark spec use them through the public index, plus `RESTORATION_INTERFACE_VERSION = "1.0.0"`, `RESTORATION_ERROR_CODES`, `RESTORATION_ERROR_MESSAGES`, `ABSTENTION_REASONS`, `SYNTHETIC_PRIOR_WARNING_TEXT`. Do not export anything from `__tests__`.
+    - Create `src/restore/index.ts` as the single export surface re-exporting every type, function and constant named in the design, plus the tuning functions and types (`permitTuningRole`, `checkFileSetsDisjoint`, `importMinimalDataset`, `MinimalDatasetFile`, `BenchmarkSplitRole`, `TuningPurpose`, `FileSetRef`) so that the script and the benchmark spec use them through the public index, plus `RESTORATION_INTERFACE_VERSION = "1.0.0"`, `RESTORATION_ERROR_CODES`, `RESTORATION_ERROR_MESSAGES`, `ABSTENTION_REASONS`, `SYNTHETIC_PRIOR_WARNING_TEXT`, `SYNTHETIC_DECK_NOTICE`, `SyntheticImageAttestation`, `SyntheticAttestationRef`, `validateSyntheticAttestation` and `validateOriginAndAttestation`. Do not export anything from `__tests__`.
     - Add `MIN_DOMAIN_INTERFACE_VERSION = "1.1.0"` and a test `domainVersion.test.ts` that compares the domain `INTERFACE_VERSION` with it (same major, equal or greater minor) and fails when lower; also assert the domain index exports `withdrawInference`, `latestLiveEntry` and `NOTHING_TO_WITHDRAW` in its error registry.
     - Files owned: `src/restore/index.ts`, `src/restore/__tests__/domainVersion.test.ts`.
     - _Requirements: 13.1, 17.12, 23.1, 23.5_
@@ -115,9 +120,10 @@ Conventions for every task:
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 4. Configuration, limits, ordering and masking helpers (Crew-delegable, Group A)
-  - Depends on: task 3. Files owned: `config/validate.ts`, `config/defaults.ts`, `determinism/ordering.ts`, `determinism/leakageGuard.ts`, and the test files below.
+  - Depends on: task 3. Files owned: `config/validate.ts`, `config/defaults.ts`, `determinism/ordering.ts`, `determinism/leakageGuard.ts`, and the test files below (task 4.4 also depends on task 7.2).
   - [ ] 4.1 Implement configuration defaults, `validateConfig` and `validateLimits`
-    - `DEFAULT_RESTORATION_CONFIG` with the design's initial values (marked as initial, not validated). `validateConfig`: documented range per field (first failure wins, `INVALID_CONFIGURATION` naming field and range), `0 <= chance margins <= 0.5`, fixed limits cannot be raised, `maxCardsPerRun` at most 10,000, and the cross-field rule that `syntheticEvaluationContext` requires `deckOrigin: "synthetic"` (`INVALID_CONFIGURATION`). `validateLimits(input)` returns `LIMIT_EXCEEDED` naming limit, supplied and permitted value before any inference starts; `INVALID_CONFIGURATION` for `deckOrigin: "synthetic"` on a deck whose Detection_Evidence carries an `Image_Digest`.
+    - `DEFAULT_RESTORATION_CONFIG` with the design's initial values (marked as initial, not validated). `validateConfig`: documented range per field (first failure wins, `INVALID_CONFIGURATION` naming field and range), `0 <= chance margins <= 0.5`, fixed limits cannot be raised, `maxCardsPerRun` at most 10,000, and the cross-field rule that `syntheticEvaluationContext` requires `deckOrigin: "synthetic"` (`INVALID_CONFIGURATION`). `validateLimits(input)` returns `LIMIT_EXCEEDED` naming limit, supplied and permitted value before any inference starts; The earlier blanket rule that rejected `deckOrigin: "synthetic"` on any deck with an `Image_Digest` is replaced by the per-card attestation check below.
+    - Attestation: add `validateSyntheticAttestation(a)` (field order generator, generatorVersion, sourceId, seed as integer, parametersDigest and imageDigest in digest format; returns the first failing field) and `validateOriginAndAttestation(input)` (check order of the design: `real` deck with any entry; per entry unknown card, card without `Image_Digest`, failing field, digest mismatch; then each card with an `Image_Digest` and no entry; first failure wins; path `syntheticAttestations[<cardId>]` with `.<field>` when a field is the cause; always `INVALID_CONFIGURATION`; digests compared in canonical `<algorithm>:<hex>` form). Cards without an `Image_Digest` need no entry, so a mixed deck is valid. Add a code comment that the declaration is the caller's and not proof. Neither function constructs an attestation. Called by the run entry point after `validateConfig` and before `validateLimits`.
     - Files owned: `src/restore/config/validate.ts`, `src/restore/config/defaults.ts`.
     - _Requirements: 1.7, 1.8, 3.21, 20.1, 20.2, 20.3, 20.4_
 
@@ -131,6 +137,11 @@ Conventions for every task:
     - Files owned: `src/restore/__tests__/config.test.ts`, `src/restore/__tests__/masking.test.ts`, `src/restore/__tests__/detectionInput.test.ts`.
     - _Requirements: 1.4, 1.7, 1.8, 19.3, 19.6, 20.2, 20.3, 20.4_
 
+  - [ ]* 4.4 Write property test for attestation validity and rejection cases
+    - **Property 26: Attestation validity and rejection cases**
+    - **Validates: Requirements 3.21, 3.22, 3.23, 3.26, 25.23, 25.24, 25.25**
+    - Depends on task 7.2 (`arbAttestedInput`). Seed `SEED_P26` (20260526), 300 runs; assert cases (a) to (d) of the property: field and digest violations name `syntheticAttestations[<cardId>].<field>` in check order, a card with an `Image_Digest` and no entry is rejected, any entry on a `real` deck is rejected, an entry for an unknown card or a card without an `Image_Digest` is rejected, valid maps (including mixed decks) pass, only `INVALID_CONFIGURATION` is used, and a rejected run yields no Hypothesis and no record.
+    - Files owned: `src/restore/__tests__/attestation.props.test.ts`.
 - [ ] 5. Cell classification and region segmentation (Crew-delegable, Group A)
   - Depends on: task 3, task 4.2 (for 5.2). Files owned: `types/cell.ts` (predicate bodies), `inference/trustedCells.ts`, `regions/segment.ts`, and the test file below.
   - [ ] 5.1 Implement the cell predicates
@@ -153,11 +164,12 @@ Conventions for every task:
   - [ ] 6.1 Implement `validatePriorMeasurement`, `evaluatePriorGate` and enablement recording
     - `validatePriorMeasurement` (`INVALID_PRIOR_MEASUREMENT` with the path of the first violation: missing field including `datasetVersion` and `splitRole`, a `splitRole` other than `tuning` or `calibration` (so `held-out`, `test` and unknown names are rejected at `splitRole`), frequency or reliability outside [0, 1], sample size below 1, kind mismatch). `evaluatePriorGate` per the design's six branches: disabled, `PRIOR_MEASUREMENT_MISSING`, real deck with synthetic-only measurement and no enablement in effect (`PRIOR_NOT_VALIDATED_FOR_REAL_DECKS`), real deck with enablement in effect (warning on, `uncalibrated`), synthetic deck in a Synthetic_Evaluation_Context (no warning), plain measurement. Measurements of scope `synthetic` and `real` stay separate and are never pooled; a synthetic frequency is labelled a generator parameter; a measurement with licence status `unchecked` is marked `local-only`.
     - `recordSyntheticPriorEnablement` appends an `enable-synthetic-prior` or `disable-synthetic-prior` entry with Action_Id and Sequence_Number (`DUPLICATE_ACTION_ID`, `NOTE_REQUIRED`, `NOTE_TOO_LONG`, `INVALID_TRANSITION` for a kind without synthetic-only status); "in effect" is the latest entry per kind by sequence. Record the gate state of every run.
+    - Attestation: a `synthetic` deck that passed `validateOriginAndAttestation` with a synthetic-only measurement uses the prior with no enablement entry, no `syntheticPriorWarning`, status `uncalibrated`, and copies the per-card `attestationRefs` into the `PriorGateState`. `PRIOR_MEASUREMENT_MISSING` still applies when no valid measurement exists. `real` decks behave exactly as before.
     - Files owned: `src/restore/gating/priorGate.ts`.
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.6, 3.7, 3.8, 3.9, 3.10, 3.12, 3.13, 3.14, 3.15, 3.16, 3.17, 3.18, 3.19, 3.20, 3.21_
 
   - [ ]* 6.2 Write gating unit tests
-    - One example per gate branch; enable then disable then enable ordering by sequence; each error code of the enablement function; local-only marking; synthetic and real measurements for one kind stay separate; a synthetic-context run applies the prior with no warning.
+    - One example per gate branch; enable then disable then enable ordering by sequence; each error code of the enablement function; local-only marking; synthetic and real measurements for one kind stay separate; a synthetic-context run applies the prior with no warning; an attested synthetic deck uses the prior with no enablement entry, no warning and copied `attestationRefs`, and still returns `PRIOR_MEASUREMENT_MISSING` without a measurement.
     - Files owned: `src/restore/__tests__/priorGate.test.ts`.
     - _Requirements: 3.2, 3.6, 3.7, 3.10, 3.15, 3.16, 3.17, 3.20_
 
@@ -171,6 +183,7 @@ Conventions for every task:
 
   - [ ] 7.2 Implement the data generators
     - `generators/data.ts`: `arbConfig`, `arbPriorMeasurement` and `arbCalibrationRecord` (valid, with `datasetVersion`, `splitRole`, roles and file-set ids, plus variants with one seeded violation tagged with the expected code, including the role, file-set and ECE-role violations), `arbRoleString`, `arbTuningPurpose`, `arbFileSetRefList`, `arbMinimalDatasetFile`, `arbExtraField` (generated path and name, never `familyKey` or `splitRole`) and `arbSplitRole`, `arbRestorationRecord` (satisfies every structural invariant, built independently of an inference run), `arbHypothesis` (varying evidence-item counts including truncation cases), `arbDetectionEvidence`, `arbRestorationInput`. All use small generated profiles of 3 to 12 rows and 2 to 8 columns unless a test says otherwise.
+    - Attestation: add `arbAttestedInput` (deck of 3 to 12 cards where a generated subset carries evidence digests and the rest are context cards without evidence, a `deckOrigin`, and a `syntheticAttestations` map with at most one seeded violation tagged with its expected path) and a test-owned attestation builder used only in tests (`src/restore` never constructs one).
     - Files owned: `src/restore/__tests__/generators/data.ts`.
     - _Requirements: 25.2_
 
@@ -237,6 +250,7 @@ Conventions for every task:
   - Depends on: task 3, task 7 (tests). Files owned: `inference/explain.ts`, `inference/rank.ts`, and the test files below.
   - [ ] 12.1 Implement deterministic explanation templates
     - Fixed-order templates for repeat, symmetry and combined evidence, contradiction sentence, synthetic-prior warning text and the label "prior measured on synthetic data only; real-card prevalence not measured", and the Calibration_Status. List at most `maxEvidenceItemsPerExplanation` items by name with "and N more"; truncate to 1,000 characters with an ellipsis while the full structured `evidenceItems` stay in the record.
+    - Attestation: for a `synthetic` deck, append `SYNTHETIC_DECK_NOTICE` to every explanation before the Calibration_Status sentence. The notice counts toward the 1,000-character cap, so truncation keeps the notice and shortens the evidence list first.
     - Files owned: `src/restore/inference/explain.ts`.
     - _Requirements: 3.9, 3.18, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
 
@@ -260,6 +274,7 @@ Conventions for every task:
   - Depends on: task 3. Files owned: `record/build.ts`, and the test file below.
   - [ ] 13.1 Implement `buildRestorationRecord`, supersession and `integrityCheck`
     - Copy each Target_Cell and region-cell Raw_Observation (value and hole likelihood, either possibly absent) once on the first run that touches it, with `patchId` and `Image_Digest` where evidence exists, and never again. A later run appends a new `RunSection` and marks earlier unreviewed Hypotheses `superseded`, except cells with Review_Outcome `accepted`, `selected` or `edited`. Record config, seed, prior gate states, calibration references, every Hypothesis and Abstention, diagnostics, base-deck digest (same FNV-1a-64 family as the domain session digest), profile id, verification markers, per-card image digests and detection result ids. Single shared sequence counter, no wall-clock value. `integrityCheck` returns `RECORD_DECK_MISMATCH` for a deck digest, raw copy or recorded domain write that disagrees with the supplied Deck, and for a derived `approved` state that disagrees with the domain approval state.
+    - Attestation: record `deckOrigin` and, for a `synthetic` deck, the per-card `syntheticAttestations` list in deck order, and copy `attestationRefs` onto each Hypothesis and `PriorGateState`. `integrityCheck` also reports `RECORD_DECK_MISMATCH` when a recorded attestation `imageDigest` differs from that card's recorded image digest.
     - Files owned: `src/restore/record/build.ts`.
     - _Requirements: 1.10, 3.13, 12.1, 12.2, 12.3, 12.5, 12.6, 12.7, 12.8, 12.9, 14.12_
 
@@ -272,6 +287,7 @@ Conventions for every task:
   - Depends on: task 3, task 7.2 (tests). Files owned: `record/serialize.ts`, and the test files below.
   - [ ] 14.1 Implement export and import of the three artifacts
     - Schema-ordered canonical writer, two-space indent, `\n` line endings, no timestamps, `null` written as the literal `null` and read back as `null`, `opaqueTimestampLabel` written only as a plain string and excluded from every equality and digest function provided. Import order: size (`INPUT_TOO_LARGE`, UTF-8 byte length before parsing), `INVALID_JSON`, `INVALID_FORMAT`, `UNSUPPORTED_SCHEMA_VERSION`, `UNKNOWN_FIELD` (path), then semantic validation `INVALID_RESTORATION_RECORD` naming the first violated invariant (confidence outside [0, 1], numeric confidence with provenance `observed`, more than three Hypotheses in a region, non-contiguous sequence, duplicate Action_Id, dangling review reference). Same pipeline for `PriorMeasurement` and `CalibrationRecord` (using the validators from task 6 and task 8 through their public functions). No image pixels or Original_Image are embedded. Never return a partial value.
+    - Attestation: serialise `deckOrigin` and the optional `syntheticAttestations` array (key order per the design; omitted when empty, never `null`), `attestationRefs` on each Hypothesis and in each `PriorGateState`. On import, `deckOrigin` defaults to `"real"` when absent (`schemaVersion` stays 1). Corruption paths: an unknown key inside an entry gives `UNKNOWN_FIELD` naming its path (for example `syntheticAttestations[0].extra`); a wrong-typed field gives `INVALID_RESTORATION_RECORD` naming the path; truncation gives `INVALID_JSON`. Semantic checks, each `INVALID_RESTORATION_RECORD`: `real` record with any entry or ref; `synthetic` record with a card that has a recorded image digest and no entry, or an entry whose digest differs; entry for a card not in the record or without an image digest; entry failing `validateSyntheticAttestation`; duplicate `cardId`; an `attestationRefs` item that differs from the record's entry; a Hypothesis of a `synthetic` record whose explanation lacks `SYNTHETIC_DECK_NOTICE` or that has `syntheticPriorWarning` true.
     - Files owned: `src/restore/record/serialize.ts`.
     - _Requirements: 17.3, 21.1, 21.2, 21.3, 21.4, 21.5, 21.6, 21.7, 21.9, 21.10, 21.11_
 
@@ -290,6 +306,7 @@ Conventions for every task:
   - Depends on: task 3. Files owned: `evidence/evidenceView.ts`, `evidence/heatmap.ts`, and the test file below.
   - [ ] 15.1 Implement the Evidence_View and heatmap builders
     - Pure builders with no rendering instruction, colour or pixel. `buildEvidenceView`: crop reference (`patchId`, `Image_Digest`) or an explicit "no image evidence" statement, Raw_Observation, `holeProbability` and `hypothesisConfidence` as separate named fields, proposed value, provenance category (or `unresolved`), supporting evidence, Calibration_Status with the `uncalibrated` marker, rank 2 and 3 alternatives, review state, Applied_Override detail, Abstention detail, verification markers, Deck_Origin, enablement entries in effect, `syntheticPriorWarning`. `buildConfidenceHeatmap`: one entry per `readIndex` with confidence or `null` (never coerced), provenance category, Restoration_State, Grid_Position through the domain `readIndexToGrid` (never re-implemented), a separate hole-probability layer, and the deck-level synthetic warning while an enablement is in effect.
+    - Attestation: every Evidence_View and every heatmap entry carries `deckOrigin` and the per-card `attestationRefs` copied from the record. No attestation is shown or implied for a `real` deck.
     - Files owned: `src/restore/evidence/evidenceView.ts`, `src/restore/evidence/heatmap.ts`.
     - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7, 18.8, 18.9, 18.10, 18.11, 18.12, 18.13, 18.14_
 
@@ -306,7 +323,7 @@ Conventions for every task:
     - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7, 14.8, 14.9, 14.10, 14.11_
 
   - [ ]* 16.2 Write state-machine unit tests
-    - Every allowed transition once and a representative set of disallowed ones; region derivation; deck derivation for each domain approval state; the reading of the withdrawal conflict: after `withdrawInference` on an approved Deck the domain state is `unapproved`, the reported transition is `approved` to `reviewed`, the withdrawn cells return to `proposed`, and the derived deck state under Req 14.7 is `proposed` while Req 17.6c states `reviewed`. The test is named after the conflict and asserts the design's reading so that a later decision changes one clearly labelled test.
+    - Every allowed transition once and a representative set of disallowed ones; region derivation; deck derivation for each domain approval state; the settled withdrawal behaviour: after `withdrawInference` on an approved Deck the domain state is `unapproved`, the reported transition is `approved` to `reviewed` (a transient state per Req 17.6c), the withdrawn cells return to `proposed`, and the derived deck state follows Req 14.7 and is `proposed`. The test is named after this behaviour and pins both the transient `reviewed` report and the derived `proposed` state.
     - Files owned: `src/restore/__tests__/stateMachine.test.ts`.
     - _Requirements: 14.7, 14.9, 14.10, 17.6c_
 
@@ -329,6 +346,7 @@ Conventions for every task:
   - Depends on: task 18. Files owned: `inference/engine.ts`, `inference/wholeCard.ts` (baseline only), and the test files below.
   - [ ] 19.1 Implement `runInference` and the run orchestration
     - Pure function over a `RestorationInput`: `validateConfig` and `validateLimits` first, base-deck `validateDeck` (`DOMAIN_RULE_REJECTED`), evidence mismatch checks (`DETECTION_EVIDENCE_MISMATCH` for unknown `cardId`, profile id or `perCell` length), prior gate evaluation for every enabled kind, trusted-cell collection, region segmentation, repeat and symmetry evaluation, image evidence and combination, ranking and abstention, calibration application, explanation, and `buildRestorationRecord`. Report diagnostics for an observed cell that contradicts an enabled prior's Hypothesis (observed cell left unchanged), for a missing polarity, and for Pending_Corrections and Applied_Overrides (Hypotheses for Applied_Override cells are recorded only, never written). The function never calls a domain write, never reads a clock, never uses randomness, and returns the same record for the same input (the Seed is recorded and not used to choose among Hypotheses). The input type carries no ground-truth field. Remove the engine stub.
+    - Attestation: call `validateOriginAndAttestation` after `validateConfig` and before `validateLimits` and any inference (a failure returns `INVALID_CONFIGURATION` with no Hypothesis and no record), and pass the validated `syntheticAttestations` map to the prior gate, the explanation builder and the record builder. The engine never constructs an attestation.
     - Files owned: `src/restore/inference/engine.ts`.
     - _Requirements: 1.2, 1.3, 1.4, 1.5, 1.9, 1.10, 2.4, 2.5, 2.7, 2.8, 2.10, 3.12, 3.13, 7.7, 19.1, 19.2, 19.4, 20.4_
 
@@ -407,6 +425,12 @@ Conventions for every task:
     - **Validates: Requirements 7.2, 7.3, 7.4, 7.7**
     - Seed `SEED_P20`, 200 runs; region lengths 0 to `2 * shortRegionBound`; lengths at or below the bound are evaluated, above it abstain with `REGION_TOO_LARGE` naming length and bound, length 1 is an isolated cell, every uncovered Target_Cell has an Abstention.
     - Files owned: `src/restore/__tests__/regionBounds.props.test.ts`.
+
+  - [ ]* 19.15 Write property test for attested synthetic decks and unchanged real decks
+    - **Property 27: Attested synthetic decks use the prior without warning, and real decks are unchanged**
+    - **Validates: Requirements 3.24, 3.25, 25.26, 25.27, 25.28**
+    - Seed `SEED_P27` (20260527), 100 runs; `arbPeriodicDeck` with `deckOrigin` `synthetic`, valid per-card attestations (mixed decks included) and a synthetic-scope `arbPriorMeasurement`; with the prior enabled and no enablement entry, Hypotheses have `syntheticPriorWarning` false, `SYNTHETIC_DECK_NOTICE` in each explanation, `deckOrigin` and `attestationRefs` in the record, every Evidence_View and every heatmap entry, and status `uncalibrated`; the same run without the measurement returns `PRIOR_MEASUREMENT_MISSING`; `real` decks give outputs and errors equal to the P19 expectations.
+    - Files owned: `src/restore/__tests__/attestedPrior.props.test.ts`.
 
 - [ ] 20. Review service (single worker, not split, Group D)
   - Depends on: tasks 16, 17, 18. Files owned: `review/approval.ts`, `review/undo.ts`, `review/service.ts`, `src/restore/__tests__/generators/review.ts`, and the test files below.
@@ -548,7 +572,7 @@ Conventions for every task:
     - _Requirements: 26.8, 26.9_
 
   - [ ] 23.4 Write the assumptions document
-    - `docs/restoration-assumptions.md`: table of R1 to R6, A3 to A8 and A10 with working value, basis, where code depends on it, the paper page or figure still to be recorded, and the correction path. State that none is verified, that no dataset is redistributed, that the Garín5 licence is unchecked, and that the within-card partner mapping is a placeholder. List the closed questions and their approved answers (Q1 to Q7, folder part of Q7 only) and the items still to be confirmed from task 27 (the Req 14.7 and 17.6c reading, Q7a and Q8).
+    - `docs/restoration-assumptions.md`: table of R1 to R6, A3 to A8 and A10 with working value, basis, where code depends on it, the paper page or figure still to be recorded, and the correction path. State that none is verified, that no dataset is redistributed, that the Garín5 licence is unchecked, and that the within-card partner mapping is a placeholder. List the closed questions and their approved answers (Q1 to Q7, folder part of Q7 only) and the items still to be confirmed from task 27 (Q7a only). Also record two settled decisions: the seed block starts at 20260500, and `reviewed` after a withdrawal on an approved Deck is a transient reported state while the derived deck state follows Req 14.7.
     - _Requirements: 4.10, 5.9, 24.5_
 
 - [ ] 24. Golden tests (Group E)
@@ -564,11 +588,16 @@ Conventions for every task:
     - _Requirements: 21.9, 25.20_
 
 - [ ] 25. Regression examples (Group A)
-  - Depends on: task 3. Files owned: `src/restore/__tests__/regressions.test.ts`.
+  - Depends on: task 3, and task 4.1 for 25.2. Files owned: `src/restore/__tests__/regressions.test.ts`.
   - [ ] 25.1 Create the regression example file
     - Create `regressions.test.ts` with a header describing the rule that every shrunk counterexample found by any property in this suite is added here as a permanent example with its seed and the date-free description of the failure. Seed it with the three example tests that are already required as permanent regressions (synthetic-prior cases a, b and c from Property 19 may stay in their own file; this file starts with a trivial self-check that it is imported by the test run).
     - Files owned: `src/restore/__tests__/regressions.test.ts`.
     - _Requirements: 25.21_
+
+  - [ ] 25.2 Add the four attestation regression examples
+    - In `regressions.test.ts`, add permanent examples calling `validateOriginAndAttestation`: (a) a `synthetic` deck with image evidence on one card and no entry for it returns `INVALID_CONFIGURATION` naming `syntheticAttestations[<cardId>]`; (b) a mixed deck of several context cards without Detection_Evidence plus one damaged card with image evidence and a matching entry is valid; (c) a deck of two cards with image evidence, one attested and one not, returns `INVALID_CONFIGURATION` naming the unattested `cardId`; (d) the same mixed deck as (b) with `deckOrigin` `real` and the entry supplied returns `INVALID_CONFIGURATION`.
+    - Files owned: `src/restore/__tests__/regressions.test.ts`.
+    - _Requirements: 25.25, 3.21, 3.22, 3.23_
 
 - [ ] 26. Integration and final guards (Group E)
   - Depends on: tasks 19, 20, 22 (including 22.3), 23 (including 23.5), 24. Files owned: the test files below.
@@ -589,9 +618,6 @@ Conventions for every task:
 
 - [ ] 27. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
-  - Confirm or amend with the user the unresolved wording conflict between Req 17.6c (the Deck state is `reviewed` after a withdrawal on an approved Deck) and Req 14.7 (the derived Deck state is `proposed` when any region is `proposed`, and the withdrawn cells return to `proposed`). The design documents the Req 14.7 reading: the reported transition is `approved` to `reviewed`, and the derived state afterwards follows 14.7. If the user prefers the 17.6c reading, amend `requirements.md` and `design.md` first, then change `deriveDeckState` and the test named after the conflict in `stateMachine.test.ts`.
-  - Confirm with the user one further inconsistency found while planning: Req 25.1 names a seed block starting at 20260400, while the design's seed register uses `20260500 + n`. This plan follows the design (`SEED_P1` to `SEED_P22` = 20260501 to 20260522). If the user prefers the requirement's block, change the constants in `seeds.ts` only.
-  - **Q8 (still pending):** the seed-block disagreement above also covers the new properties P23 to P25 (`SEED_P23` to `SEED_P25` = 20260523 to 20260525 under the design's block, which is also clear of the benchmark's 20260700 block). Do not treat the block as settled until the user answers.
   - Confirm with the user **Q7a**, where committed Prior_Measurement and Calibration_Record JSON artifacts live: recommended `data/restoration/` with a README stating source, licence and roles (task 22.1 defaults to it), or beside the benchmark's committed outputs in `data/benchmark`. If the answer changes, update the default in `scripts/restoration-tune.ts`, the README location and `docs/restoration-priors.md`, and update `structure.md` only if the choice needs it.
   - Confirm that `docs/restoration-assumptions.md` records Q1 to Q7 with their approved answers.
 
@@ -602,7 +628,7 @@ Conventions for every task:
 
 | Task | Group | Depends on | Files owned (disjoint) |
 |------|-------|------------|------------------------|
-| 4 | A | 3 | `config/validate.ts`, `config/defaults.ts`, `determinism/*` |
+| 4 | A | 3 (4.4 also 7.2) | `config/validate.ts`, `config/defaults.ts`, `determinism/*` |
 | 5 | A | 3, 4.2 | `types/cell.ts` (bodies), `inference/trustedCells.ts`, `regions/segment.ts` |
 | 6 | A | 3 | `gating/priorGate.ts` |
 | 7 | A | 3 | `__tests__/generators/synthetic.ts`, `generators/data.ts`, `syntheticRecoveryConditions.ts` |
@@ -627,11 +653,11 @@ Conventions for every task:
 | 24 | E | 14, 15, 19, 20 | `__tests__/golden/*`, `scripts/restoration-golden-update.ts` |
 | 26 | E | 19, 20, 22, 23, 24 | `__tests__/guards.test.ts`, `integration.test.ts`, `errorCodes.test.ts` |
 
-- Each Crew task owns its tests and edits no file owned by another task. `package.json` is edited only in task 1.2, which pre-registers the script names. Tasks 19 and 21 both touch `wholeCard.ts` in different waves.
-- Property coverage: P1, P7 to P13, P16, P19 and P20 are in task 19; P2 to P6 and P14 in task 20; P15 in task 14; P17 (golden) in task 24; P18 (process rule) in task 25; P21 in task 12; P22 in task 8.3 (extended for roles, `datasetVersion` and file-set ids); P23, P24 and P25 in tasks 22.5, 22.6 and 22.7. Properties 7, 8, 10 and 16 depend on the synthetic builders in task 7.
-- Seeds: `SEED_Pn = 20260500 + n` for n from 1 to 25, `SEED_GOLDEN = 20260600` (block start pending Q8). Generator preconditions are stated in a comment beside each test (Req 25.2).
+- Each Crew task owns its tests and edits no file owned by another task. No task edits `package.json` or the build and test configs. The integrator creates them at milestone M0 with every script pre-registered. Tasks 19 and 21 both touch `wholeCard.ts` in different waves.
+- Property coverage: P1, P7 to P13, P16, P19 and P20 are in task 19; P2 to P6 and P14 in task 20; P15 in task 14; P17 (golden) in task 24; P18 (process rule) in task 25; P21 in task 12; P22 in task 8.3 (extended for roles, `datasetVersion` and file-set ids); P23, P24 and P25 in tasks 22.5, 22.6 and 22.7; P26 in task 4.4; P27 in task 19.15. The four Req 25.25 regression cases are in task 25.2. Properties 7, 8, 10 and 16 depend on the synthetic builders in task 7.
+- Seeds: `SEED_Pn = 20260500 + n` for n from 1 to 27, `SEED_GOLDEN = 20260600` (block start 20260500 is settled). Generator preconditions are stated in a comment beside each test (Req 25.2).
 - Restoration numeric defaults (thresholds, penalty constant, short-region bound, periods) are initial values. They are re-derived only by `scripts/restoration-tune.ts` on a tuning split and loaded from versioned JSON. No accuracy, frequency, reliability or calibration number is claimed before a recorded run.
-- UI (spec 4) and benchmark (spec 5) work is excluded. This plan provides the interfaces they consume: `runInference`, `applyReviewAction`, `approveDeck`, the Evidence_View and heatmap builders, the state accessors, the masking contract and the serialisers.
+- Benchmark (spec 4) and UI (spec 5) work is excluded. This plan provides the interfaces they consume: `runInference`, `applyReviewAction`, `approveDeck`, the Evidence_View and heatmap builders, the state accessors, the masking contract and the serialisers.
 - To start executing, open this file and click "Start task" next to a task item.
 
 ## Task Dependency Graph
@@ -650,12 +676,12 @@ Conventions for every task:
     { "id": 8, "tasks": ["2.8"] },
     { "id": 9, "tasks": ["3"] },
     { "id": 10, "tasks": ["4.1", "4.2", "5.1", "6.1", "7.1", "7.2", "8.1", "11.1", "12.1", "12.2", "13.1", "14.1", "15.1", "16.1", "17.1", "22.3", "23.1", "23.2", "23.3", "23.4"] },
-    { "id": 11, "tasks": ["5.2", "4.3", "6.2", "7.3", "8.2", "8.3", "11.2", "12.3", "12.4", "13.2", "14.2", "14.3", "15.2", "16.2", "17.2", "22.4", "22.5", "22.6", "22.7", "23.5", "25.1"] },
+    { "id": 11, "tasks": ["5.2", "4.3", "4.4", "6.2", "7.3", "8.2", "8.3", "11.2", "12.3", "12.4", "13.2", "14.2", "14.3", "15.2", "16.2", "17.2", "22.4", "22.5", "22.6", "22.7", "23.5", "25.1", "25.2"] },
     { "id": 12, "tasks": ["9.1", "10.1", "5.3"] },
     { "id": 13, "tasks": ["9.2", "10.2"] },
     { "id": 14, "tasks": ["18"] },
     { "id": 15, "tasks": ["19.1", "19.2", "20.1", "20.2"] },
-    { "id": 16, "tasks": ["19.3", "19.4", "19.5", "19.6", "19.7", "19.8", "19.9", "19.10", "19.11", "19.12", "19.13", "19.14", "20.3", "21.1", "22.1"] },
+    { "id": 16, "tasks": ["19.3", "19.4", "19.5", "19.6", "19.7", "19.8", "19.9", "19.10", "19.11", "19.12", "19.13", "19.14", "19.15", "20.3", "21.1", "22.1"] },
     { "id": 17, "tasks": ["20.4", "21.2", "22.2", "24.1", "26.2", "26.3"] },
     { "id": 18, "tasks": ["20.5", "20.6", "20.7", "20.8", "20.9", "20.10", "20.11", "24.2"] },
     { "id": 19, "tasks": ["26.1"] },

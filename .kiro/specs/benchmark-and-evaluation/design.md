@@ -101,6 +101,7 @@ src/benchmark/
     protocol.ts                       UserComparisonProtocol constants/doc anchors
     studyResult.ts                     StudyResultFile schema, validating importer
   adapters/
+    syntheticAttestations.ts           builds restoration's per-card syntheticAttestations from a Dataset_Manifest
     restorationTuneExport.ts           writes restoration's minimal tune-dataset JSON format
     calibrationExport.ts               writes/validates restoration CalibrationRecord + PriorMeasurement
     damageLevelForDetection.ts          re-exports the Damage_Level_File as the exact shape
@@ -123,6 +124,7 @@ data/
     experiments/                   committed Preliminary_Experiment reports (E-1..E-7), canonical JSON
     threshold-register.json        committed Threshold_Register
     fixtures/                      small committed quick-profile manifests/reports for golden tests
+    browser/                       committed BrowserReports (one canonical-JSON file per report) and index.json
   synthetic/
     damage-levels.json              the Damage_Level_File (supersedes the placeholder; Req 7.7)
   generated/                        gitignored: full datasets, images (Req 22.7)
@@ -495,6 +497,20 @@ export interface ItemManifestEntry {
   readonly damageLevel: DamageLevelName; readonly track: "detection" | "restoration" | "end-to-end";
   readonly derivedSeed: number;
   readonly artifacts: readonly { readonly relativePath: string; readonly byteLength: number; readonly digest: { readonly algorithm: string; readonly hex: string } }[];
+  /** One entry per rendered (damaged) card image of the Item; absent for Items with no image (restoration track).
+   *  Holds exactly the fields restoration's SyntheticImageAttestation needs, so no translation is required (A0-4). */
+  readonly imageProvenance?: readonly CardImageProvenance[];
+}
+export interface CardImageProvenance {
+  readonly cardId: string;
+  readonly generator: string;                 // "loom-lazarus-benchmark-renderer"
+  readonly generatorVersion: string;          // RenderParameters.rendererVersion combined with the damage-model version
+  readonly sourceId: string;                  // `${datasetVersion}/${itemId}`; the dataset id plus the item id
+  readonly seed: number;                      // the card image's derived seed (deriveSeed output)
+  readonly parametersDigest: string;          // "sha-256:<lowercase hex>" over the canonical JSON of the RenderParameters,
+                                              // the resolved ImageDamageLevelParameters and the Damage_Mask parameters
+  readonly imageDigest: string;               // "sha-256:<lowercase hex>" of the bytes of the damaged image passed to detect();
+                                              // the same canonical text form detection exposes as imageDigestText
 }
 
 export function buildDatasetManifest(config: DatasetConfig): BenchmarkResult<DatasetManifest>;   // byte-identical for identical config+seeds+versions
@@ -695,6 +711,7 @@ export interface RestorationRunContext {
   readonly deckOrigin: "synthetic"; readonly syntheticEvaluationContext: true;             // Req 17.2, fixed for every benchmark run
   readonly enabledPriorsCondition: "none" | "repeat-only" | "symmetry-only" | "both";       // Req 17.4
   readonly priorMeasurementRefs: ReadonlyMap<StructuralPriorKind, { readonly benchmarkVersion: string; readonly scope: "synthetic" }>;  // Req 17.3
+  readonly syntheticAttestations: ReadonlyMap<string, unknown>;                              // restoration's SyntheticImageAttestation per cardId (A0-4); see below
   readonly restorationConfigUsed: unknown;                                                   // restoration's RestorationConfig, recorded verbatim
   readonly detectionParametersUsed: unknown;                                                  // vision's DetectionParameters, recorded verbatim
   readonly tunedConstantsFileRefs: readonly { readonly path: string; readonly version: string }[];  // Req 17.5
@@ -703,6 +720,27 @@ export interface RestorationRunContext {
 ```
 
 The Benchmark_Runner runs restoration on benchmark decks with `deckOrigin: "synthetic"` and `syntheticEvaluationContext: true` always, recording both (Req 17.2); it enables a `StructuralPriorKind` only with a `PriorMeasurement` produced from the `tuning` or `calibration` role of the same `datasetVersion`, recording the measurement reference and scope `synthetic` (Req 17.3). It evaluates all four labelled conditions -- priors disabled, repeat-only, symmetry-only, both -- as separate rows (Req 17.4), recording the complete `RestorationConfig`/`DetectionParameters` used and marking every tuned-constants-file-derived value with that file's identifier and version (Req 17.5). It passes the restoration `seed` from configuration and documents (in `docs/benchmark-metrics.md`) that the algorithm never uses it to choose among Hypotheses (Req 17.6). A condition whose `PriorMeasurement`/`CalibrationRecord` is absent is recorded `not-evaluated` with the reason, never substituted (Req 17.7).
+
+**Synthetic attestations (A0-4, plan finding C-17).** Restoration rejects `deckOrigin: "synthetic"` with `INVALID_CONFIGURATION` (path `syntheticAttestations[<cardId>]`) for any card whose detection evidence carries an Image_Digest, unless a per-card attestation naming that digest is supplied. The Benchmark_Suite never passes `deckOrigin: "real"` for benchmark data to avoid this check; it supplies the attestations instead.
+
+```ts
+/** Builds restoration's per-card syntheticAttestations from the Dataset_Manifest. Pure; reads only the manifest
+ *  (never a Ground_Truth_Artifact). One entry per cardId in item.imageProvenance, mapping field for field:
+ *  generator, generatorVersion, sourceId, seed, parametersDigest, imageDigest ("sha-256:<lowercase hex>"). */
+export function buildSyntheticAttestations(manifest: DatasetManifest, itemId: string): BenchmarkResult<ReadonlyMap<string, unknown>>;
+
+/** Checks, before restoration runs, that each card's manifest imageDigest equals the digest text detection
+ *  reported for the same image (CardDetectionRecord.imageDigestText). A mismatch returns DATASET_DIGEST_MISMATCH
+ *  naming the cardId; no new error code is introduced. */
+export function checkAttestationsAgainstDetection(
+  attestations: ReadonlyMap<string, unknown>, detectedDigestTextByCard: ReadonlyMap<string, string>
+): BenchmarkResult<void>;
+```
+
+- The End_To_End_Track, and any other track that passes detection evidence to restoration, builds `syntheticAttestations` with `buildSyntheticAttestations` and records them in `RestorationRunContext`. The `imageDigest` is the sha-256 of the damaged image bytes given to `detect()`, in the same `<algorithm>:<hex>` text form detection computes, so the two compare equal without translation.
+- The Restoration_Track passes no detection evidence (`detectionEvidence` is undefined), so no card has an Image_Digest and it needs no attestation. It still passes `deckOrigin: "synthetic"` and `syntheticEvaluationContext: true`, with an empty or absent `syntheticAttestations`. A non-empty map on a deck without evidence is itself rejected by restoration (an entry for a card without an Image_Digest), so the track never builds one.
+- An attestation is a declaration by the benchmark runner, not proof. Reports record that fact in the `RestorationRunContext` and never describe the attestation as verification of how the image was made.
+- A synthetic-scope prior is used only with a `PriorMeasurement` as before (Req 17.3); an attested deck needs no `enable-synthetic-prior` entry and every output still records `deckOrigin: "synthetic"`.
 
 ### Preliminary experiments and the Threshold_Register (requirement 18)
 
@@ -848,11 +886,11 @@ export interface BrowserReport {
 }
 export const BROWSER_REPORT_MAX_BYTES = 2 * 1024 * 1024;   // initial value; permitted range 64 KiB to 8 MiB
 export function buildBrowserReport(report: BenchmarkReport, firstNFailureExamples: number): BenchmarkResult<BrowserReport>;   // REPORT_TOO_LARGE naming size and limit instead of writing
-export interface BrowserReportIndexEntry { readonly datasetVersion: string; readonly executionProfile: "quick" | "full"; readonly reportDigest: { readonly algorithm: string; readonly hex: string }; readonly trackStatuses: Readonly<Record<string, "evaluated" | "not-evaluated">> }
+export interface BrowserReportIndexEntry { readonly id: string; readonly profileId: string; readonly datasetVersion: string; readonly executionProfile: "quick" | "full"; readonly reportDigest: { readonly algorithm: string; readonly hex: string }; readonly trackStatuses: Readonly<Record<string, "evaluated" | "not-evaluated">> }
 export function buildBrowserReportIndex(entries: readonly BrowserReportIndexEntry[]): string;   // canonical JSON
 ```
 
-A `BrowserReport` omits per-cell detail but keeps every `MetricValue` with its interval and counts, `ReliabilityData`, the first N failure examples (a documented count), and references image artifacts only by path and digest (Req 22.1). It must not exceed `BROWSER_REPORT_MAX_BYTES` (initial 2 MiB, permitted 64 KiB-8 MiB); exceeding it returns `REPORT_TOO_LARGE` naming the size and limit instead of writing a larger file (Req 22.2). The index file lists available reports with dataset identity, profile, digest and track statuses (Req 22.3). A `BrowserReport` loads with a plain static request, no server computation, no network service, no account (Req 22.4); it carries the fixed honesty statements and `unverified` markers directly, so the UI need not recompute them (Req 22.5). A committed quick-profile `BrowserReport` is regenerated only by `scripts/benchmark-browser-report.ts` (Req 22.6). Generated datasets and images stay out of the repository by default; only manifests, the `ThresholdRegister`, the `DamageLevelFile`, small fixtures and `BrowserReport`s are committed (Req 22.7).
+A `BrowserReport` omits per-cell detail but keeps every `MetricValue` with its interval and counts, `ReliabilityData`, the first N failure examples (a documented count), and references image artifacts only by path and digest (Req 22.1). It must not exceed `BROWSER_REPORT_MAX_BYTES` (initial 2 MiB, permitted 64 KiB-8 MiB); exceeding it returns `REPORT_TOO_LARGE` naming the size and limit instead of writing a larger file (Req 22.2). Committed BrowserReports live at `data/benchmark/browser/`, one canonical-JSON file per report, with the index at `data/benchmark/browser/index.json` (A0-7). The index file lists available reports, each entry with its report `id` (also the file stem), machine `profileId`, `datasetVersion`, execution profile, `reportDigest` and track statuses (Req 22.3). `scripts/benchmark-browser-report.ts` is the only writer of that folder, and the Workbench reads it by this fixed path. A `BrowserReport` loads with a plain static request, no server computation, no network service, no account (Req 22.4); it carries the fixed honesty statements and `unverified` markers directly, so the UI need not recompute them (Req 22.5). A committed quick-profile `BrowserReport` is regenerated only by `scripts/benchmark-browser-report.ts` (Req 22.6). Generated datasets and images stay out of the repository by default; only manifests, the `ThresholdRegister`, the `DamageLevelFile`, small fixtures and `BrowserReport`s are committed (Req 22.7).
 
 ### Execution profiles, bounds, headless operation (requirement 23)
 
@@ -919,6 +957,7 @@ export function runRestorationTrack(items: readonly SystemInputRef[], configsByC
 // For each item and each of the four conditions, builds a RestorationInput with baseDeck = the damaged
 // Deck named by item.damagedDeckPath, detectionEvidence = undefined (Req 1.2's own "no image evidence"),
 // config = configsByCondition[condition], and calls restoration's runInference through its public index.
+// No card has an Image_Digest, so no syntheticAttestations are passed (A0-4).
 
 // tracks/endToEndTrack.ts
 export function runEndToEndTrack(items: readonly SystemInputRef[], detectionParameters: unknown, restorationConfig: unknown): Promise<BenchmarkResult<readonly { readonly itemId: string; readonly record: unknown }[]>>;
@@ -926,6 +965,9 @@ export function runEndToEndTrack(items: readonly SystemInputRef[], detectionPara
 // assemble the mapped cards into one Deck via the DOMAIN's createDeck (never hand-built) -> runInference()
 // with detectionEvidence built from each card's CardDetectionRecord, satisfying DetectionEvidenceInput
 // structurally with no cast and no src/vision import inside src/restore (Req 1.3).
+// Before runInference: syntheticAttestations = buildSyntheticAttestations(manifest, itemId), then
+// checkAttestationsAgainstDetection against each CardDetectionRecord.imageDigestText. The RestorationConfig
+// carries deckOrigin "synthetic" (never "real") and the attestations are passed in RestorationInput.syntheticAttestations (A0-4).
 ```
 
 `DetectAndCompareFn`-shaped wrappers exist only so the tracks' unit tests can inject a stub detector/restorer without invoking the real (slow) pipeline; production code always calls the real `detect`/`mapDetection`/`runInference` through the public indexes.
@@ -1211,6 +1253,7 @@ PBT applies: the dataset builder, damage models, metric functions, bootstrap, ba
 
 - One example test per `BenchmarkErrorCode` (Req 25.5) and per abstention-reason tally pass-through.
 - Each track's wiring: `runDetectionTrack` calls `detect` through the vision index with no `GroundTruthRef` constructed; `runRestorationTrack` passes `detectionEvidence: undefined`; `runEndToEndTrack` assembles the mapped cards into a Deck through the domain's own `createDeck` and builds `DetectionEvidenceInput` with no `src/vision` import inside the restoration call path (Req 1.1-1.3).
+- Attestation example (A0-4): on one `quick`-profile end-to-end Item, a run with `deckOrigin: "synthetic"` and no `syntheticAttestations` fails with restoration's `INVALID_CONFIGURATION` (path `syntheticAttestations[<cardId>]`); the same run with the attestations from `buildSyntheticAttestations` succeeds. A further case changes one manifest `imageDigest` and expects `checkAttestationsAgainstDetection` to return `DATASET_DIGEST_MISMATCH` naming the card. A restoration-track run with no detection evidence succeeds with no attestations. No test passes `deckOrigin: "real"` for benchmark data.
 - Real-photograph examples: `not-evaluated` with no licensed folder; `countsOnly` below `MIN_LABELLED_CELLS_FOR_RATE`; a local-only (non-redistributable) folder's results never appear in a committed file; no pooling of real and synthetic numbers in one table.
 - User-comparison examples: `not-conducted` with no `StudyResultFile`; `insufficient-sample` below the configured minimum; a malformed `StudyResultFile` returns `INVALID_STUDY_RESULT` naming the first violation with no partial import.
 - Ethics/licensing examples: a `data` folder with third-party material and no README is refused; no personal data field exists in any report type (checked by a schema key-table scan, mirroring the domain's own canonical-writer key-table approach).
@@ -1299,6 +1342,15 @@ These changes are required by this spec. They are listed here and are **not** ap
 3. **`structure.md`.** The `scripts` top-level folder entry is already proposed by `card-detection/design.md` and `restoration-engine/design.md`; this spec reuses it and introduces no new top-level folder of its own. See [CONFIRM] Q2 for which spec's tasks phase performs the shared edit.
 4. **Earlier specs' "dependencies for later specs" sections.** `card-domain-and-loom-engine`, `card-detection` and `restoration-engine` each describe their consumers assuming a four-spec sequence ending in the UI. Each should note that this spec (benchmark-and-evaluation) is the fourth and the UI is the fifth, and that the UI consumes this spec's `BrowserReport`s rather than calling detection/restoration metric functions directly for benchmark purposes.
 5. **Detection and restoration test suites' optional `withinCardPartner`/symmetry-mapping export.** Only if [CONFIRM] Q1 above is resolved toward option (b): restoration's `symmetry.ts` would need to export its partner-mapping function from the public index so this spec's conformance test imports it through the index rather than internally.
+
+## Amendment record
+
+| ID | Date | Change in this document | Source |
+|----|------|-------------------------|--------|
+| A0-4 | 2026-11-26 | Per-card synthetic attestations. `ItemManifestEntry` gains `imageProvenance` (`CardImageProvenance`). New `adapters/syntheticAttestations.ts` with `buildSyntheticAttestations` and `checkAttestationsAgainstDetection`. `RestorationRunContext` gains `syntheticAttestations`. The End_To_End_Track builds and passes them. The Restoration_Track passes no detection evidence and needs none. `deckOrigin: "real"` is never used for benchmark data. New attestation example test. | `docs/PLAN.md` findings C-04, C-17; restoration-engine design "Synthetic image attestation" |
+| A0-7 | 2026-11-26 | Committed BrowserReports at `data/benchmark/browser/` with `index.json`. `BrowserReportIndexEntry` gains `id` and `profileId`. Module layout lists the folder. | `docs/PLAN.md` finding C-07 |
+
+`requirements.md` and `tasks.md` are not changed by this record. Their wording for the end-to-end track (requirement 1.3) and the browser-report location (requirement 22) stays as written and is consistent with these edits. Task updates, if needed, follow in the tasks phase.
 
 ## Interfaces the UI spec depends on
 

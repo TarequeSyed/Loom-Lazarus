@@ -23,7 +23,17 @@ This feature delivers the Workbench: the browser application in `src/ui` (React,
 - **Workbench**: The browser application specified by this document, as a whole.
 - **Shell**: The persistent frame of the Workbench: left navigation, the central workbench area, the contextual inspector area, and the persistent footer content of requirement 3.
 - **Scan_Screen**, **Studio_Screen**, **Loom_Screen**, **Lab_Screen**, **Trail_Screen**: The five main screens: Scan & Detect, Restoration Studio, Virtual Loom, Benchmark Lab, Kiro Trail / About.
-- **Demo_Bundle**: The committed sample under `data` that contains one damaged synthetic card image, its recorded orientation, a recorded loom configuration, a precomputed approved deck for the Quick_Loom_Demo, and a README with source and licence. Its content is synthetic unless the README records a checked licence for real material.
+- **Demo_Bundle**: The committed sample under `data/demo` that contains one damaged synthetic card image (a copy of the detection-produced sample under `data/samples`, never rendered by the Workbench), a copy of its Sample_Meta, its recorded orientation, a recorded loom configuration, the Context_Deck and Damaged_Card_Index, a precomputed detection result, a precomputed approved deck for the Quick_Loom_Demo, a manifest that records the `imageDigest` of the image, and a README with source and licence. Its content is synthetic unless the README records a checked licence for real material.
+- **Placeholder_Bundle**: A Demo_Bundle built from test doubles before the headless engine works. Every Placeholder_Bundle file is labelled as a placeholder, and no Placeholder_Bundle is shipped in a release build.
+- **Sample_Meta**: The metadata file `data/samples/sample.meta.json` written by the detection sample script (generator identifier, generator version, source identifier, seed, parameters digest and image digest). A copy sits in the Demo_Bundle. The image digest has the string form "sha-256:<hex>".
+- **Deck_Origin**: The restoration input `deckOrigin`, with value `real` or `synthetic`. `real` means derived from a photograph or card whose synthetic origin is not attested. `synthetic` means generator-produced and attested.
+- **Synthetic_Image_Attestation**: The restoration-layer declaration, bound to one card and one image digest, that a generator produced the image. A deck carries a `syntheticAttestations` map from card identifier to attestation. The attestation is a declaration by the caller and is not proof of how an image was made.
+- **Synthetic_Deck_Notice**: The restoration-layer fixed notice that an attested synthetic deck carries on its records, evidence views and hypotheses. The Workbench shows the notice text as supplied by the restoration layer and does not author it.
+- **Simulated_Demo_Badge**: The persistent label "Simulated demo card" together with the Deck_Origin, shown wherever the bundled demonstration deck appears.
+- **Context_Deck**: The Demo_Bundle file `context-deck.json`: simulated intact cards supplied as a bitmap, labelled "Simulated intact cards (synthetic)", carrying no image evidence. The Demo_Bundle also records the Damaged_Card_Index.
+- **Damaged_Card_Index**: The position (`damagedCardIndex`) in the Context_Deck at which the detected damaged card is inserted before restoration.
+- **Prior_Gate_Panel**: The panel of the Studio_Screen that shows the Prior_Gate state of every Structural_Prior kind and offers the controls to turn each kind on or off (requirement 10).
+- **Results_Summary**: The P0 read-only summary of the committed quick-profile Browser_Report, read through the Report_Reader from `data/benchmark/browser/index.json` (requirement 18 criterion 20). The full Benchmark_Lab stays P1.
 - **Quick_Loom_Demo**: The path that opens the Loom_Screen with the Demo_Bundle approved deck and recorded loom configuration (requirement 4).
 - **Full_Journey**: The path through all five P0 steps: demo card, detection, restoration, approval, loom, export (requirement 2).
 - **Click**: One activation of a control by pointer press or by the Enter or Space key on a focused control. Scrolling, hovering, moving focus and typing are not Clicks.
@@ -84,11 +94,12 @@ This feature delivers the Workbench: the browser application in `src/ui` (React,
 #### Acceptance Criteria
 
 1. THE Workbench SHALL deliver the P0 tier before any P1 or P2 item is started, and SHALL tag every requirement and screen feature of this document with its Tier.
-2. THE P0 tier SHALL consist of: the Shell with persistent credits and Educational_Label (requirement 3); the Quick_Loom_Demo (requirement 4); Scan_Screen with the Demo_Bundle card, detection with progress and cancel, overlay of holes and uncertain regions, and failure display (requirements 5 to 7); Studio_Screen with the card viewer, Provenance_Markers, the region inspector, accept, select, reject, value edit, undo, and approval with blocking reasons (requirements 9 to 13); Loom_Screen with explicit mirror and hook-mapping selection, step, play, pause, seek and reset, and the Educational_Label (requirement 15); JSON and SVG export in Unverified_Export_Mode with Verified_Export_Mode present and disabled (requirement 16); the error mapping (requirement 20); keyboard access, contrast and reduced-motion behaviour for these screens (requirements 21 to 23); and the end-to-end journey test (requirement 28).
+2. THE P0 tier SHALL consist of: the Shell with persistent credits and Educational_Label (requirement 3); the Quick_Loom_Demo (requirement 4); Scan_Screen with the Demo_Bundle card, detection with progress and cancel, overlay of holes and uncertain regions, and failure display (requirements 5 to 7); Studio_Screen with the card viewer, Provenance_Markers, the Prior_Gate_Panel with both of its cases, the deck-context step, the deck-origin handling and the Simulated_Demo_Badge (requirements 10 and 31), the region inspector, accept, select, reject, value edit, undo, and approval with blocking reasons (requirements 9 to 13); the Results_Summary (requirement 18 criterion 20); Loom_Screen with explicit mirror and hook-mapping selection, step, play, pause, seek and reset, and the Educational_Label (requirement 15); JSON and SVG export in Unverified_Export_Mode with Verified_Export_Mode present and disabled (requirement 16); the error mapping (requirement 20); keyboard access, contrast and reduced-motion behaviour for these screens (requirements 21 to 23); and the end-to-end journey test (requirement 28).
 3. THE P1 tier SHALL consist of: file picker and drag-and-drop upload of user images, quality-finding detail, manual alignment fallback, condition overrides, needs-review handling, side-by-side comparison, playback speed and replay, Weavers_Notes, the Benchmark_Lab, the Trail_Screen, glossary and first-run guidance beyond the P0 labels, workspace export and import, and the accessibility suite for all screens.
 4. THE P2 tier SHALL consist of: ambient fog and thread animation, perforation and thread motifs beyond static backgrounds, synchronised zoom between the side-by-side cards, opt-in browser storage of a workspace, deep links beyond the screen route, and decorative transitions.
 5. THE Workbench SHALL keep each P1 and P2 item removable without changing the P0 path, so that the P0 path passes its end-to-end test with every P1 and P2 item disabled.
 6. THE Workbench SHALL provide a build configuration that disables all P2 items, and THE end-to-end journey test of requirement 28 SHALL run on that configuration.
+7. THE Workbench SHALL assign the P0 tier to every control on which the P0 restoration journey depends, including every control that turns a Structural_Prior on or off, and SHALL include turning a Structural_Prior on as a step of the P0 journey and of its Playwright test.
 
 ### Requirement 3: Shell, navigation and persistent content
 
@@ -107,6 +118,7 @@ This feature delivers the Workbench: the browser application in `src/ui` (React,
 7. THE Shell SHALL show the bundled application version and the Component_Stamp of the engines in the About section of the Trail_Screen.
 8. THE Shell SHALL contain a visible, labelled "Glossary" entry that opens the glossary of requirement 19 from every screen.
 9. THE Shell SHALL contain no advertisement, tracking script or third-party request, and SHALL load all fonts, scripts and assets from the same origin.
+10. WHILE the bundled demonstration deck or any value derived from it is shown on a screen, THE Shell SHALL show the Simulated_Demo_Badge with the Deck_Origin on that screen, without scrolling past other content, and SHALL NOT show the badge for a deck built from an uploaded file.
 
 ### Requirement 4: First visit and the three-Click loom demonstration
 
@@ -124,7 +136,7 @@ This feature delivers the Workbench: the browser application in `src/ui` (React,
 6. THE first-run guidance of requirement 19 SHALL be non-blocking, SHALL NOT need a Click to dismiss before another control is usable, and SHALL NOT be counted as a Click.
 7. THE Workbench SHALL label the demonstration deck as "bundled synthetic demonstration deck" together with its recorded provenance, and SHALL state that the recorded loom configuration was chosen by the demonstration and is not a default of the Workbench.
 8. THE Workbench SHALL provide no default mirror orientation and no default hook mapping for a deck that the user brings to the Loom_Screen, and SHALL treat the Demo_Bundle recorded configuration as an explicit selection supplied with the sample.
-9. WHEN a user activates "Walk through the full restoration", THE Workbench SHALL open the Scan_Screen with the Demo_Bundle card already offered and a visible, ordered list of the remaining steps (detect, review, approve, weave, export) with the current step marked.
+9. WHEN a user activates "Walk through the full restoration", THE Workbench SHALL open the Scan_Screen with the Demo_Bundle card already offered and a visible, ordered list of the remaining steps (detect, add to the context deck, turn on a structural prior, propose, review, approve, weave, export) with the current step marked.
 10. THE Workbench SHALL provide an automated test that starts from the first page load, performs the Quick_Loom_Demo with at most three Clicks counted by the rule of the Glossary, and asserts that at least one woven pass is visible after the last Click.
 
 ### Requirement 5: Scan & Detect: intake and the bundled card
@@ -144,6 +156,8 @@ This feature delivers the Workbench: the browser application in `src/ui` (React,
 7. WHEN a user-supplied image yields `orientation-unresolved`, THE Scan_Screen SHALL show the candidate Orientations with their scores and previews, SHALL NOT show per-cell results, and SHALL require the user to choose one before detection continues.
 8. THE Scan_Screen SHALL state in plain language that images stay in the browser and are not uploaded.
 9. THE Scan_Screen SHALL show an empty state before any image is chosen, a loading state while the Image_Backend loads, a progress state while detection runs (requirement 6), an error state for a failed run, and an incomplete-data state for an `aligned-with-warnings` result, each with a visible text description and a next action.
+10. WHEN the Demo_Bundle card is selected, THE Scan_Screen SHALL compute the digest of the bundled image bytes and SHALL compare it with the `imageDigest` of the Demo_Bundle manifest (string form "sha-256:<hex>") before the card is treated as an attested synthetic image (requirement 31).
+11. THE Scan_Screen SHALL state next to every uploaded image that the image is treated as a real photograph for restoration, and SHALL offer no control that marks an uploaded image as synthetic.
 
 ### Requirement 6: Scan & Detect: progress, cancellation and failure
 
@@ -225,20 +239,24 @@ This feature delivers the Workbench: the browser application in `src/ui` (React,
 
 ### Requirement 10: Restoration Studio: running restoration and the prior gate
 
-**Tier:** P0 for running with the Demo_Bundle configuration, P1 for prior controls
+**Tier:** P0 (running with the Demo_Bundle configuration, the Prior_Gate_Panel and both of its cases)
 
 **User Story:** As a researcher, I want restoration started explicitly and the structural priors shown as gated, so that nothing is inferred on faith.
 
 #### Acceptance Criteria
 
-1. WHEN a user activates "Propose restorations", THE Studio_Screen SHALL pass the Domain_Deck and the Detection_Evidence to the Worker_Host, SHALL show progress, and SHALL show the returned Hypotheses and Abstentions without writing any Hypothesis to the Domain_Deck.
+1. WHEN a user activates "Propose restorations", THE Studio_Screen SHALL pass the Domain_Deck, the Detection_Evidence, the Deck_Origin and the per-card `syntheticAttestations` of requirement 31 to the Worker_Host, SHALL show progress, and SHALL show the returned Hypotheses and Abstentions without writing any Hypothesis to the Domain_Deck.
 2. THE Studio_Screen SHALL state in plain language that proposals are suggestions, that nothing changes the deck until the user accepts it, and that the system leaves a cell unknown when the evidence does not support a proposal.
 3. THE Studio_Screen SHALL show the Prior_Gate state of each Structural_Prior kind (disabled, enabled with measurement reference, scope `synthetic` or `real`), and SHALL show a Synthetic_Only_Prior on a real deck as disabled until the user records `enable-synthetic-prior` with a note.
-4. WHEN a user records `enable-synthetic-prior` or `disable-synthetic-prior`, THE Studio_Screen SHALL require a note of 1 to 1,000 characters, SHALL show the Action_Id and Sequence_Number of the entry, and SHALL show the Synthetic_Prior_Warning on every dependent item.
+4. WHEN a user records `enable-synthetic-prior` or `disable-synthetic-prior` for a deck with Deck_Origin `real`, THE Studio_Screen SHALL require a note of 1 to 1,000 characters, SHALL show the Action_Id and Sequence_Number of the entry, and SHALL show the Synthetic_Prior_Warning on every dependent item.
 5. IF the run returns `PRIOR_MEASUREMENT_MISSING`, `PRIOR_NOT_VALIDATED_FOR_REAL_DECKS`, `INVALID_CONFIGURATION`, `LIMIT_EXCEEDED` or `DETECTION_EVIDENCE_MISMATCH`, THEN THE Studio_Screen SHALL show the mapped message with a recovery action and SHALL leave the Domain_Deck and Restoration_Record unchanged.
-6. THE Studio_Screen SHALL show for the bundled Demo_Bundle run the Prior_Measurement scope and the statement that a `synthetic` frequency is a generator parameter and not evidence of historical prevalence.
+6. THE Studio_Screen SHALL show for the bundled Demo_Bundle run the Prior_Measurement scope and the statement that a `synthetic` frequency is a generator parameter and not evidence of historical prevalence, and that the demonstration card was generated with a repeating structure, so recovering it shows the evidence and the controls and not accuracy on historical cards.
 7. THE Studio_Screen SHALL show, for every region that has no Hypothesis, the Abstention_Reason in plain language and its structured values (for example the region length and the bound for `REGION_TOO_LARGE`).
 8. IF no Target_Cell exists, THEN THE Studio_Screen SHALL state that the card has no missing cells to restore and SHALL offer the approval action when no other blocker exists.
+9. WHERE the Deck_Origin is `synthetic` with a valid attestation for every card that carries image evidence, THE Prior_Gate_Panel SHALL offer a configuration toggle per Structural_Prior kind that turns the kind on or off, SHALL enable a toggle only while a valid Prior_Measurement exists for that kind, SHALL need no enablement note, SHALL show no real-deck warning, and SHALL show the Synthetic_Deck_Notice on every dependent item.
+10. WHERE the Deck_Origin is `real`, THE Prior_Gate_Panel SHALL offer the recorded `enable-synthetic-prior` flow of criteria 3 and 4 for each Synthetic_Only_Prior, SHALL show the fixed Synthetic_Prior_Warning on every dependent item, and SHALL NOT offer the toggle of criterion 9.
+11. WHEN a user turns a Structural_Prior on or off in either case, THE Studio_Screen SHALL pass the changed configuration to the next restoration run, SHALL change no Domain_Deck cell, and SHALL show the resulting Prior_Gate state from the restoration layer.
+12. IF a toggle or an enablement is not possible (for example no valid Prior_Measurement), THEN THE Prior_Gate_Panel SHALL show the mapped message for the returned Restoration_Error_Code, SHALL keep the previous Prior_Gate state, and SHALL name the missing Prior_Measurement.
 
 ### Requirement 11: Restoration Studio: region inspector and alternatives
 
@@ -383,7 +401,7 @@ This feature delivers the Workbench: the browser application in `src/ui` (React,
 
 ### Requirement 18: Benchmark Lab
 
-**Tier:** P1
+**Tier:** P1 (the Results_Summary of criterion 20 is P0)
 
 **User Story:** As a judge and a researcher, I want to read the committed benchmark results exactly as recorded, with every limit and unknown shown, so that no number is overstated and the system is judged on evidence.
 
@@ -408,6 +426,8 @@ This feature delivers the Workbench: the browser application in `src/ui` (React,
 17. THE Lab_Screen SHALL NOT compute, round up, average, rank or summarise any metric beyond what the report records, and SHALL NOT invent an accuracy, a calibration or a time-saving number.
 18. THE Lab_Screen SHALL show a chart value also as text or a table with the same values, and SHALL use markers or patterns in addition to colour for every chart series.
 19. WHERE two reports have different Component_Stamps, THE Lab_Screen SHALL NOT place them in one comparison without the label "different component versions".
+20. THE Workbench SHALL provide the Results_Summary as a P0 read-only view that reads the report index from `data/benchmark/browser/index.json` and the committed quick-profile Browser_Report through the Report_Reader, SHALL show the values, labels, honesty statements and `not-evaluated`, `undefined` and `not-estimated` statuses of criteria 5 to 9 as recorded, SHALL need no chart, and SHALL apply criteria 3 and 4 when the index or report is missing or invalid.
+21. THE Workbench SHALL read the index and the reports only from `data/benchmark/browser/`, as copied into the static site by the build, and SHALL make no other report location known to the Report_Reader.
 
 ### Requirement 19: Guidance, glossary and plain-language labels
 
@@ -584,6 +604,9 @@ This feature delivers the Workbench: the browser application in `src/ui` (React,
 11. THE Workbench SHALL provide a property test that, for all confidence values in {`null`, numbers in [0, 1]} and both Calibration_Status values, the Restoration_Confidence_Display shows "not evaluated" exactly for `null`, shows the number otherwise, and always includes the Calibration_Marker for a number.
 12. THE Workbench SHALL provide golden tests for the view models of a fixed small deck (the provenance legend, the heatmap legend and the inspector data), committed in version control with a stated reason for any change.
 13. THE Workbench SHALL convert every shrunk counterexample into a permanent example test.
+14. THE journey test of criterion 1 SHALL, between detection and restoration, assert that the detected damaged card is inserted into the Context_Deck at the Damaged_Card_Index, and SHALL, before restoration, turn a Structural_Prior on through the Prior_Gate_Panel (the toggle of requirement 10 criterion 9 for the attested demonstration deck) and assert the resulting Prior_Gate state and the Synthetic_Deck_Notice.
+15. THE Workbench SHALL provide a second Playwright test that uploads a file, asserts Deck_Origin `real` with no attestation and no Simulated_Demo_Badge, turns a Synthetic_Only_Prior on through the recorded `enable-synthetic-prior` flow with a note, and asserts the Synthetic_Prior_Warning on every dependent item.
+16. THE Workbench SHALL provide the tests of requirement 31 criterion 7.
 
 ### Requirement 29: Interfaces consumed and interface freeze
 
@@ -616,6 +639,29 @@ This feature delivers the Workbench: the browser application in `src/ui` (React,
 7. WHERE no sibling owns a Boundary (the Trail_Data, the Demo_Bundle manifest, the route parameters and the user-entered text), THE Workbench SHALL provide exactly one validator for it, in a single module per Boundary, and SHALL give its failures a code in a Workbench error registry that the Error_Map covers (requirement 20.1).
 8. THE Workbench SHALL provide, for each Boundary listed in criterion 2, a corrupted-input test that supplies at least one truncated, one wrongly typed, one oversized or out-of-range, and one unknown-field or unknown-value input (where the Boundary has such a case), asserts the returned error code, the mapped message and recovery action, that no partial value was loaded, and that the Session_Artifacts are unchanged, and SHALL provide a test that fails when a Boundary of criterion 2 has no such test.
 9. THE Workbench SHALL provide a test that asserts that every error code returned at a Boundary, including those of the Workbench error registry, has an Error_Map entry.
+10. THE Workbench SHALL treat these Demo_Bundle files as Boundary inputs of criterion 2(h): the Sample_Meta copy through the detection Sample_Meta validator, the Context_Deck through the domain Deck_Serializer importer, the Damaged_Card_Index (an integer within the Context_Deck length plus one, validated by the Workbench manifest validator), and the manifest `imageDigest` (string form "sha-256:<hex>", validated by the Workbench manifest validator).
+11. IF the Sample_Meta image digest differs from the manifest `imageDigest`, THEN THE Workbench SHALL report the mismatch as a Workbench error-registry code, SHALL treat the bundled card as an unattested image (requirement 31 criterion 4), and SHALL load no attestation.
+
+### Requirement 31: Deck origin, synthetic attestation and deck context
+
+**Tier:** P0
+
+**User Story:** As an archivist and a judge, I want the bundled demonstration card honestly labelled as simulated and every uploaded photograph treated as real, so that synthetic data is never presented as historical evidence and no validation rule is satisfied by a false label.
+
+#### Acceptance Criteria
+
+1. THE Workbench SHALL pass `deckOrigin: "synthetic"` to the restoration run only for the bundled damaged card of the Demo_Bundle, together with a `syntheticAttestations` entry for that card built from the Demo_Bundle copy of the Sample_Meta, and only after criterion 3 succeeds.
+2. THE Workbench SHALL pass `deckOrigin: "real"` with no `syntheticAttestations` entry for every uploaded file, without exception, and SHALL NOT provide any control, configuration value, file content or route parameter that causes an uploaded file to carry an attestation.
+3. WHEN the Demo_Bundle card is used, THE Workbench SHALL compute the digest of the bundled image bytes and SHALL accept the attestation only if the computed digest equals the manifest `imageDigest` (string form "sha-256:<hex>") and equals the Sample_Meta image digest.
+4. IF the digest check of criterion 3 fails, THEN THE Workbench SHALL treat the bundled card as an unattested image with `deckOrigin: "real"`, SHALL show the reason (the computed digest and the expected digest) in plain language, and SHALL NOT show the Simulated_Demo_Badge as an attestation claim.
+5. THE Workbench SHALL show the Simulated_Demo_Badge and the Deck_Origin on every screen and view that shows the bundled demonstration deck, and SHALL show the Synthetic_Deck_Notice from the restoration layer in the inspector of every cell, region and hypothesis of an attested synthetic deck.
+6. THE Workbench SHALL describe the attestation as a declaration bound to an image digest, and SHALL NOT describe it as proof of how an image was made.
+7. THE Workbench SHALL provide these tests: no code path in `src/ui` attaches an attestation to an uploaded file (a static check and a runtime test over the upload flow); a bundled image whose bytes differ from the manifest `imageDigest` falls back to `deckOrigin: "real"` and shows the stated reason; and the Simulated_Demo_Badge renders on every screen that shows the demonstration deck and on none that shows an uploaded deck.
+8. WHEN the Demo_Bundle card has been detected and the user continues to restoration, THE Workbench SHALL insert the detected damaged card into the Context_Deck at the Damaged_Card_Index through the domain card-insert operation, SHALL pass the resulting Domain_Deck to restoration, and SHALL perform no other deck construction.
+9. THE Workbench SHALL label every Context_Deck card "Simulated intact cards (synthetic)" wherever it is shown, and SHALL attach no attestation to a Context_Deck card because it carries no image evidence.
+10. WHEN a user supplies an uploaded file and no Context_Deck, THE Workbench SHALL state that only within-card structure is available for that deck, and SHALL run restoration on the single card.
+11. THE Demo_Bundle build SHALL copy the detection-produced sample image and its Sample_Meta from `data/samples`, SHALL render no card image of its own, and SHALL regenerate the precomputed detection result and the approved deck from the real pipeline once the headless engine passes its gate.
+12. WHERE a Placeholder_Bundle exists before that gate, THE Workbench SHALL label every placeholder file as a placeholder, and THE release build SHALL fail if any Placeholder_Bundle file is present in its output.
 
 ## Assumptions requiring verification
 
@@ -631,6 +677,8 @@ The Workbench copies the verification markers of the MachineProfile and carries 
 | D3 | Card orientation in the photo | The Demo_Bundle carries a recorded Orientation, labelled "recorded with the bundled sample, not detected". A user image with unresolved orientation needs a user choice. |
 | W1 | Which profile facts make up Required_Verified_Fields | Resolved by Q4: the eleven entries of requirement 14 criterion 2. The domain exposes markers for `gridSize`, `physicalDimensions`, `endHoles`, `reservedPositions`, `readOrder`, `hookMappings`, `defaultThreadsPerHook`, `mirrorOptions` and `cardToPass`. Orientation (D3) and hole polarity (D7) have no domain marker, and hole spacing, hole sizes and end-hole geometry are not separately marked. Until the amendment lands, those entries count as unverified. |
 | W5 | Validation at each Boundary (requirement 30) | The Workbench calls the Owner_Validator. Corrupted-input behaviour of each owner is covered by the owner's own tests and re-checked at the Boundary by requirement 30. |
+| W6 | Synthetic attestation | The attestation is a caller declaration bound to an image digest and is not proof of origin. The Workbench attaches it only to the bundled asset whose digest matches the committed manifest (requirement 31). |
+| W7 | Context_Deck | The simulated intact cards stand in for the other cards of a deck. Restoration on them shows the evidence and controls, not accuracy on historical cards. |
 | W2 | Budget values (first paint, bundle sizes, latency, tablet width, touch target size) | Initial values are defined in design and validated by measurement. No figure is asserted here. |
 | W3 | The Demo_Bundle content, the recorded loom configuration and the precomputed result | To be generated by the sibling pipelines and committed with a README. Their numbers are not benchmark results. |
 | W4 | Plain-language labels aid comprehension for newcomers | Not verified until a usability study is recorded (requirement 19.5). The Workbench makes no claim before then. |
@@ -641,6 +689,9 @@ The Workbench consumes the following public exports by name as stated in the sib
 
 - **card-domain-and-loom-engine:** `MachineProfile` and its `VerificationStatus` per field, `Garín_Profile`, `Deck`, `Card`, `Cell`, `EffectiveView`, `Provenance`, `Bit`, `ReadIndex`, `GridPosition`, `readIndexToGrid`, `gridToReadIndex`, `userEdit`, `undoEdit`, `withdrawInference`, `requestApproval`, `revokeApproval`, `setInferred` (indirectly through the restoration review service), the Approval_Record and Edit_History accessors, `validateDeck`, the Deck_Serializer export and import, the Session_Log builder and `replaySession`, State_Digest, the Interpreter and the pure `create`, `step`, `pause`, `resume`, `seek`, `reset`, `runToEnd`, `SimulationState`, `FabricBuffer`, the Hook_Mapping and mirror option types, the Weft_Colour_Layer type, the Bitmap_Converter (not used in P0), the SVG_Exporter, the Cutting_Caveat constant, the Educational_Label constant, the interface version constant and the ErrorCode registry with its stable messages.
 - **card-detection:** `detect` through the Detection_Client and the Detection_Worker protocol (`run`, `progress`, `cancel`, `result`, `error`, `ready`), `DetectionResult`, `DetectionParameters`, Alignment_Status, failure diagnostics, Derived_Artifact descriptors, Quality_Finding and Unknown_Region polygons, the Manual_Correction_Service operations for both correction classes, the Correction_Log exporter and importer, the reconciliation result, `mapDetection` and the `CardDetectionRecord` with `userConditionOverrides` and `notApplied`, the Detection_Result exporter and importer, the Vision_Error_Code registry, the Implementation_Stamp and the interface version constant.
+- **restoration-engine (additions of amendment 4):** the `deckOrigin` input, the per-card `syntheticAttestations` map and the `Synthetic_Image_Attestation` type, the Synthetic_Deck_Notice constant, and the rule that a `synthetic` deck is valid only when every card with image evidence has an attestation whose digest equals that card's `Image_Digest`.
+- **card-detection (additions of amendment 4):** the `SampleMeta` type and its validator, and the sample image and `sample.meta.json` under `data/samples`.
+- **card-domain-and-loom-engine (addition of amendment 4):** the card-insert operation on a Deck.
 - **restoration-engine:** the restoration run function, the review service operations (`accept-hypothesis`, `select-alternative`, `edit-cell`, `reject-hypothesis`, `acknowledge-override`, `approve-deck`, `revoke-approval`, `undo-action`, `enable-synthetic-prior`, `disable-synthetic-prior`), Hypothesis and Abstention types, the Evidence_View builder, the Confidence_Heatmap_Data builder, the Restoration_State accessors for cell, region and deck, the unresolved-items list, the Calibration_Status markers, the Prior_Gate state, the Synthetic_Prior_Warning flag and fixed text, the Record_Serializer, the Restoration_Error_Code and Abstention_Reason registries, the Opaque_Timestamp_Label support and the interface version constant.
 - **benchmark-and-evaluation:** the browser-safe Report_Reader, the Browser_Report and index types, `MetricValue`, interval statuses, `ReliabilityData`, the user-comparison section statuses, the real-photograph track result, the threshold entry statuses, the fixed honesty-statement constants, `ComponentStamp`, `unverifiedMarkers`, the Benchmark_Error_Code registry and its messages, and the committed quick-profile Browser_Report.
 
@@ -653,10 +704,14 @@ Each sibling's runtime validator or importer named in requirement 30 criterion 2
 3. **Card-detection:** confirm that the `Detection_Client` is usable from `src/ui` without importing `src/workers` internals, and that a precomputed Detection_Result can be supplied for the fallback of requirement 6.8 (Q3).
 4. **Card-detection and restoration:** define the Demo_Bundle format (image, recorded Orientation, precomputed results) and where it is stored under `data` with a README.
 5. **Restoration:** confirm the Opaque_Timestamp_Label limit (64 characters in its Q3) so that the Workbench can supply one or none.
-6. **Benchmark:** confirm the location and file names of the committed report index and the quick-profile Browser_Report that the build copies into the static site, and that the Report_Reader is exported through a browser-safe subpath.
+6. **Benchmark:** the committed report index is `data/benchmark/browser/index.json`, with the quick-profile Browser_Report beside it (plan item A0-7). Confirm the report file names that the build copies into the static site, and that the Report_Reader is exported through a browser-safe subpath.
 7. **structure.md:** the `ui` dependency line should name the browser-safe benchmark reader subpath explicitly. The build-time Trail conversion needs a stated home: recommended `scripts/build-trail.ts`, writing generated JSON under `data/generated` for the Vite build to bundle. Update `structure.md` first if a new folder is needed.
 8. **tech.md (Q6, listing only):** the open schema-validator trade-off is resolved for the Workbench by requirement 30: the Workbench adds no validator library and calls the Owner_Validators. Each owning spec must export a runtime validator for its external input (detection intake and the Detection_Result and Correction_Log importers, the domain Deck and Session_Log importers, the Report_Reader). For the Trail_Data and the Demo_Bundle manifest, which no sibling owns, the Workbench owns one validator each (requirement 30 criterion 7).
 9. **kiro-evidence.md:** state the build-time checks of requirement 17.4 as the verification rule for bundled entries, so that the steering and the converter agree.
+
+10. **Restoration (A0-4, listing only):** add `deckOrigin` handling with a per-card `syntheticAttestations` map, replacing the rule that rejects every `synthetic` deck with image evidence.
+11. **Detection (A0-5, A0-9, listing only):** export `SampleMeta` with a validator, and write the generator identifier, version, source identifier, seed, parameters digest and image digest ("sha-256:<hex>") into `data/samples/sample.meta.json`.
+12. **Domain (A0-9, listing only):** confirm a card-insert operation on a Deck with index validation.
 
 ## Deliverables mapping
 
@@ -697,5 +752,6 @@ Each sibling's runtime validator or importer named in requirement 30 criterion 2
 | 1 | Q4 resolved. Required_Verified_Fields is now an explicit list of eleven entries (grid, physical dimensions and spacing, end holes, reserved positions, orientation, hole polarity, read order, hook mapping, threads-per-hook, mirror, card-to-pass). Verified_Export_Mode stays disabled until all are `verified` with a citation. Unverified downloads need no acknowledgement or dialog and carry Unverified_Assumption_Metadata. The acknowledgement requirement was removed. | User decision | Glossary; requirement 14 criteria 2 to 5 and 10; requirement 28 criteria 2 and 10; assumption W1; amendment 1 to the domain spec; Q4 |
 | 2 | Q6 resolved. New requirement 30 lists every external input Boundary, requires the Owner_Validator at each, adds the user-text, route-parameter, Trail_Data and Demo_Bundle manifest validators, forbids a second validator for sibling-owned data, and requires a corrupted-input test per Boundary. | User decision | Glossary; requirements 16 criterion 3, 20 criterion 1 and 30; dependencies; assumption W5; amendment 8 to tech.md; Q6 |
 | 3 | Domain amendments listed, not applied: markers for orientation and hole polarity, hole spacing, hole sizes and end-hole geometry; exporter metadata for the hook mapping, threads-per-hook and mirror; an accessor for the eleven statuses. | Follows from 1 | Amendments to earlier specs, item 1 |
+| 4 | Plan amendments A0-3, A0-4, A0-5, A0-7, A0-9 and the two user corrections (synthetic data is never marked real to pass validation; every control the P0 restoration journey depends on is P0). The Prior_Gate_Panel and its two cases are P0 (requirement 10, requirement 2 criteria 2 and 7). New requirement 31 covers deck origin, attestation, the Simulated_Demo_Badge and the deck-context step. Demo_Bundle now copies the detection sample, carries the Context_Deck and Damaged_Card_Index, and uses a Placeholder_Bundle before the headless gate. The Results_Summary is P0 and reads `data/benchmark/browser/index.json`. Journey tests extended. | User approval of PLAN.md | Glossary; requirements 2, 3, 4, 5, 10, 18, 28, 30 and 31; assumptions W6 and W7; dependencies; amendments 10 to 12 |
 
-Numbering of requirements 1 to 29 is unchanged. `design.md` and `tasks.md` were not touched.
+Numbering of requirements 1 to 30 is unchanged; requirement 31 is new. `design.md` and `tasks.md` were not touched.

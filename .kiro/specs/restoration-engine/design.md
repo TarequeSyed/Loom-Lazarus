@@ -29,6 +29,7 @@ Research summary (no external research needed; sources are the project steering 
 | D1 (restoration) | `setInferred` requires a finite numeric confidence in [0,1] and rejects `null`; `null` on a Deck cell always means "not evaluated". | domain design D9 |
 | D2 (restoration) | The domain provides undo only for `user-edit` entries. An `inference` entry is reversed only by `withdrawInference`, never by `undoEdit`. | domain design D2, D10 |
 | Roles (amendment) | Benchmark split roles are `tuning`, `calibration`, `held-out` and the sealed `test`. Restoration and `scripts/restoration-tune.ts` read only `tuning` and `calibration`. Official `held-out` and `test` metrics come only from the benchmark runner (spec 4). The spec order is domain, detection, restoration, benchmark, UI. | Req 3.4, 10.5–10.10, 24.1, 24.3, 26; benchmark-and-evaluation design |
+| Attestation (amendment) | Attestations are per card: `syntheticAttestations` maps `cardId` to a `SyntheticImageAttestation`. A `synthetic` deck is valid only if every card whose detection evidence carries an `Image_Digest` has an entry whose `imageDigest` equals that digest. Cards without an `Image_Digest` need none. Synthetic data is never marked `real` to pass validation, and real photographs cannot be relabelled synthetic without a matching attestation. Each attestation is an unverified caller declaration. A validated synthetic deck may use a synthetic-scope prior with no enablement entry and no `syntheticPriorWarning`; it still needs a Prior_Measurement. No new error code. | Req 3.21–3.26, 25.23–25.28; docs/PLAN.md Section 5.3 |
 | Q1 (resolved) | The domain was amended (interface version 1.1.0). Restoration reverses an accepted or selected inference by calling `withdrawInference` once per region cell. No fallback error and no restoration-side projection exist. | requirements.md Q1; domain design D10 |
 
 ### Out of scope
@@ -55,6 +56,7 @@ src/restore/
     audit.ts                   AuditEntry, OpaqueTimestampLabel
   gating/
     priorGate.ts               evaluatePriorGate, enableSyntheticPrior, disableSyntheticPrior
+    attestation.ts             validateSyntheticAttestation, validateOriginAndAttestation, SYNTHETIC_DECK_NOTICE
   regions/
     segment.ts                 segmentRegions (Target_Cell runs, Protected_Cell boundaries)
   inference/
@@ -215,6 +217,16 @@ export interface RestorationInput {
   readonly priorMeasurements?: ReadonlyMap<StructuralPriorKind, PriorMeasurement>;
   readonly calibrationRecord?: CalibrationRecord;
   readonly syntheticPriorEnablements?: readonly SyntheticPriorEnablementEntry[];  // in-effect enable/disable history
+  readonly syntheticAttestations?: ReadonlyMap<string, SyntheticImageAttestation>;  // keyed by cardId; absent or empty for deckOrigin "real"; see "Synthetic image attestation"
+}
+
+export interface SyntheticImageAttestation {
+  readonly generator: string;            // non-empty
+  readonly generatorVersion: string;     // non-empty
+  readonly sourceId: string;             // dataset or bundle identifier, non-empty
+  readonly seed: number;                 // integer
+  readonly parametersDigest: string;     // documented digest format (same format as Image_Digest hex plus algorithm)
+  readonly imageDigest: string;          // documented digest format; must equal the evidence Image_Digest
 }
 
 export type StructuralPriorKind = "repeat" | "symmetry";
@@ -262,7 +274,46 @@ export interface RestorationConfig {
 }
 ```
 
-`validateConfig(config): RestorationResult<RestorationConfig>` checks every numeric field against its documented range (first failure wins, returns `INVALID_CONFIGURATION` naming the field and its range), checks `0 <= repeatChanceMargin, symmetryChanceMargin <= 0.5`, and checks the Requirement 3.21 cross-field rule: `syntheticEvaluationContext` true requires `deckOrigin === "synthetic"`, else `INVALID_CONFIGURATION` on `syntheticEvaluationContext`.
+`validateConfig(config): RestorationResult<RestorationConfig>` checks every numeric field against its documented range (first failure wins, returns `INVALID_CONFIGURATION` naming the field and its range), checks `0 <= repeatChanceMargin, symmetryChanceMargin <= 0.5`, and checks the first clause of Requirement 3.21: `syntheticEvaluationContext` true requires `deckOrigin === "synthetic"`, else `INVALID_CONFIGURATION` on `syntheticEvaluationContext`.
+
+#### Synthetic image attestation (requirements 3.21 to 3.26)
+
+An attestation is a declaration by the caller, bound to one image digest of one card. `RestorationInput.syntheticAttestations` is a map from `cardId` to `SyntheticImageAttestation`, because Detection_Evidence is also keyed by `cardId`: a deck has at most one attestation per card. The Restoration_Engine cannot prove how an image was made, and `docs/restoration-priors.md` and the code comment on `validateSyntheticAttestation` say so. The map guards one thing: a real photograph cannot be relabelled `synthetic` unless the caller also supplies a declaration naming that photograph's digest for that card. Who attaches entries:
+
+- The benchmark runner builds one entry per card with a generated image from its dataset manifest.
+- The Workbench attaches entries only for bundled assets whose digests match the committed Demo_Bundle manifest, and never for an uploaded file. Uploads are always `deckOrigin: "real"`. The demo deck holds several simulated intact context cards supplied as a bitmap, with no Detection_Evidence and therefore no attestation, plus one detected damaged card with an attestation. The Workbench also shows the persistent "Simulated demo card" badge.
+- `src/restore` itself never creates an attestation.
+
+```ts
+export const SYNTHETIC_DECK_NOTICE = "Measured on synthetic data. This says nothing about historical cards.";
+
+/** Field checks of one entry, in the order generator, generatorVersion, sourceId, seed (integer),
+ *  parametersDigest (digest format), imageDigest (digest format). Returns the name of the first failing field. */
+export function validateSyntheticAttestation(a: unknown): RestorationResult<SyntheticImageAttestation>;
+
+/** Input-level check, run by the run entry point after validateConfig and before validateLimits and any inference.
+ *  Digest comparison uses the canonical text form `<algorithm>:<hex>` of each evidence Image_Digest. */
+export function validateOriginAndAttestation(input: RestorationInput): RestorationResult<void>;
+```
+
+`validateOriginAndAttestation` order, first failure wins. Every failure is `INVALID_CONFIGURATION` with `path` `syntheticAttestations[<cardId>]`, and `.<field>` appended when a field is the cause (no new error code, Req 3.26):
+
+```
+1. digestByCard = canonical "<algorithm>:<hex>" of the Image_Digest of every card whose Detection_Evidence carries one
+   (cards without Detection_Evidence, or whose evidence has no Image_Digest, are not in the map)
+   order = cardIds of the deck in deck order, then the remaining keys of syntheticAttestations in ascending cardId order
+2. config.deckOrigin === "real" and syntheticAttestations has any entry
+                                       -> path of the first entry in `order`                         (Req 3.23)
+3. for each entry in `order` (config.deckOrigin === "synthetic"):                                   (Req 3.22)
+     a. cardId absent from the Base_Deck                       -> path syntheticAttestations[<cardId>]
+     b. card is not in digestByCard (no Image_Digest)          -> path syntheticAttestations[<cardId>]
+     c. first failing field per validateSyntheticAttestation   -> path syntheticAttestations[<cardId>].<field>
+     d. imageDigest differs from digestByCard[cardId]          -> path syntheticAttestations[<cardId>].imageDigest
+4. for each card in deck order that is in digestByCard (config.deckOrigin === "synthetic"):          (Req 3.21)
+     no entry for the cardId                                   -> path syntheticAttestations[<cardId>]
+```
+
+Cards without an `Image_Digest` need no attestation, so a mixed deck (intact context cards without evidence plus one attested damaged card) is valid. A `synthetic` deck with no image evidence at all needs no attestation. It is accepted as `synthetic`, because no photograph can be relabelled, and the Synthetic_Evaluation_Context rule of Req 3.20 applies unchanged. A `synthetic` deck in which a card has an `Image_Digest` and no matching entry is rejected at step 4, and an entry that names a card without image evidence is rejected at step 3b.
 
 ### Cell classification (pure predicates over `EffectiveView` and evidence)
 
@@ -327,6 +378,12 @@ export function validatePriorMeasurement(m: unknown): RestorationResult<PriorMea
 
 export type DeckOrigin = "real" | "synthetic";
 
+export interface SyntheticAttestationRef {
+  readonly cardId: string;
+  readonly sourceId: string; readonly imageDigest: string;
+  readonly declaration: "unverified caller declaration";   // fixed text, Req 3.26
+}
+
 export interface SyntheticPriorEnablementEntry {
   readonly actionId: ActionId; readonly sequence: SequenceNumber;
   readonly kind: "enable-synthetic-prior" | "disable-synthetic-prior";
@@ -343,15 +400,20 @@ export interface PriorGateState {
   readonly isSyntheticOnly: boolean;          // true iff the only measurement found has scope "synthetic"
   readonly syntheticEnablementInEffect: boolean;  // true iff an enable- entry is in effect for deckOrigin "real"
   readonly effectivelyEnabled: boolean;       // the actual gate outcome used by the Inference_Engine
+  readonly deckOrigin: DeckOrigin;
+  readonly attestationRefs: readonly SyntheticAttestationRef[];   // one per attested card, in deck order; empty unless deckOrigin is "synthetic"
   readonly measurementRef?: { readonly priorKind: StructuralPriorKind; readonly benchmarkVersion: string; readonly scope: "synthetic" | "real" };
 }
 
 export function evaluatePriorGate(
   kind: StructuralPriorKind, config: RestorationConfig,
   measurements: ReadonlyMap<StructuralPriorKind, PriorMeasurement>,
-  enablements: readonly SyntheticPriorEnablementEntry[]
+  enablements: readonly SyntheticPriorEnablementEntry[],
+  attestations?: ReadonlyMap<string, SyntheticImageAttestation>    // already validated by validateOriginAndAttestation
 ): RestorationResult<PriorGateState>;
 ```
+
+For a synthetic deck that passed `validateOriginAndAttestation` (every card with an `Image_Digest` attested) the gate needs no `enable-synthetic-prior` entry, produces `syntheticPriorWarning: false`, and still returns `PRIOR_MEASUREMENT_MISSING` when no Prior_Measurement exists, because that check precedes every branch (Req 3.24). `PriorGateState` gains `deckOrigin` and `attestationRefs` (per attested card: `cardId`, the attestation's `sourceId` and `imageDigest`) so the record shows why no warning applies. For `real` decks the gate behaves exactly as before the amendment (Property 27).
 
 `evaluatePriorGate` pseudocode (Req 3.1–3.21):
 
@@ -367,8 +429,12 @@ evaluatePriorGate(kind, config, measurements, enablements):
       inEffect = latest non-reversed enablement for kind, deckOrigin real
       if inEffect is "disable" or absent: return error PRIOR_NOT_VALIDATED_FOR_REAL_DECKS(kind)   (Req 3.15)
       else: gate.effectivelyEnabled = true, gate.syntheticEnablementInEffect = true               (Req 3.14, 3.18)
-  elif config.deckOrigin === "synthetic" and config.syntheticEvaluationContext and isSyntheticOnly:
-      gate.effectivelyEnabled = true, gate.syntheticEnablementInEffect = false                     (Req 3.20)
+  elif config.deckOrigin === "synthetic" and attestationsValid(input) and isSyntheticOnly:
+      // validated synthetic deck (per-card attestations), with or without syntheticEvaluationContext (Req 3.24)
+      gate.effectivelyEnabled = true, gate.syntheticEnablementInEffect = false,
+      gate.syntheticPriorWarning = false                                                            (Req 3.24)
+      // a synthetic deck with no image evidence has no card needing an attestation, so attestationsValid
+      // is true for it and the Synthetic_Evaluation_Context rule of Req 3.20 gives the same outcome
   else:
       gate.effectivelyEnabled = true
   return gate
@@ -535,6 +601,8 @@ export interface Hypothesis {
   readonly explanation: string;                   // <= 1000 chars, deterministic template (requirement 9)
   readonly priorMeasurementRef?: { readonly priorKind: StructuralPriorKind; readonly benchmarkVersion: string };
   readonly syntheticPriorWarning: boolean;
+  readonly deckOrigin: DeckOrigin;                // Req 3.25
+  readonly attestationRefs?: readonly SyntheticAttestationRef[];   // attested cards whose image evidence the Hypothesis uses (its target card), Req 3.25; a card without an attestation has no image evidence
   readonly stretch?: true;                        // present only for whole-card recovery (requirement 11)
 }
 ```
@@ -576,8 +644,11 @@ combined:       repeat text + " " + symmetry text + " Combined via log-odds with
 + if contradicted:            " Image evidence contradicted the structural candidate; confidence reduced."
 + if syntheticPriorWarning:    " " + SYNTHETIC_PRIOR_WARNING_TEXT + " prior measured on synthetic data only;
                                  real-card prevalence not measured."
++ if validated synthetic deck: " " + SYNTHETIC_DECK_NOTICE      // exact fixed text, Req 3.25
 + always:                      " Calibration: {calibrationStatus.kind}."
 ```
+
+The notice is appended after the synthetic-prior warning text (if any) and before the calibration status, and counts toward the 1,000-character limit; truncation keeps the notice and the calibration status by shortening the evidence-item list first. On a validated synthetic deck the Calibration_Status is `uncalibrated` unless a valid Calibration_Record of scope `synthetic` applies (Req 3.25); `CalibrationRecord` therefore gains an optional `scope: "synthetic" | "real"` (absent means `real`), and `applyCalibration` treats a record whose scope differs from the deck origin as not applicable.
 
 Up to `config.maxEvidenceItemsPerExplanation` individual evidence items (by `cardId`/`readIndex`) are listed by name with the total count appended ("and N more") when truncated (Req 9.1). If the assembled text exceeds 1,000 characters it is truncated with an ellipsis, and the full structured `evidenceItems` array (never parsed from text) remains in the `RestorationRecord` (Req 9.3, 9.4). `CalibrationStatus` always appears in the text (Req 9.6) and the synthetic-prior label text, when present, is the exact fixed string of Req 3.9/9.5.
 
@@ -598,6 +669,7 @@ Only called when `config.wholeCardRecoveryEnabled` is true and the card's region
 export interface CalibrationRecord {
   readonly schemaVersion: 1;
   readonly method: "histogram-binning";
+  readonly scope?: "synthetic" | "real";              // absent means "real"; a record applies only to decks of the same origin (Req 3.25)
   readonly calibrationRole: "calibration";            // Benchmark_Split_Role the fit read (only value allowed)
   readonly tuningRole: "tuning";                      // Benchmark_Split_Role used to choose thresholds (only value allowed)
   readonly calibrationFileSetIds: readonly string[];  // identifiers of the file sets the fit read
@@ -623,8 +695,9 @@ export function validateCalibrationRecord(r: unknown): RestorationResult<Calibra
 // expectedCalibrationError is present with measuredOnRole === "calibration" (the fit read that role) or a value outside [0,1]
 
 export function applyCalibration(rawConfidence: number, supportingCount: number, priorKind: StructuralPriorKind,
-  record: CalibrationRecord | undefined): CalibrationStatus & { readonly value: number } {
+  record: CalibrationRecord | undefined, deckOrigin: DeckOrigin = "real"): CalibrationStatus & { readonly value: number } {
   if (record === undefined) return { kind: "uncalibrated", value: rawConfidence };
+  if ((record.scope ?? "real") !== deckOrigin) return { kind: "uncalibrated", value: rawConfidence };
   if (!record.validPriorKinds.includes(priorKind)) return { kind: "uncalibrated", value: rawConfidence };
   if (supportingCount < record.validSupportRange.min || supportingCount > record.validSupportRange.max)
     return { kind: "uncalibrated", value: rawConfidence };
@@ -747,6 +820,8 @@ export interface RestorationRecord {
   readonly reviewActions: readonly AuditEntry[];                 // requirement 17
   readonly supersededHypotheses: ReadonlyMap<string, "superseded">;  // keyed by a stable hypothesis id
   readonly syntheticPriorEnablements: readonly SyntheticPriorEnablementEntry[];
+  readonly deckOrigin: DeckOrigin;                                   // Req 3.20, 3.25
+  readonly syntheticAttestations?: readonly (SyntheticImageAttestation & { readonly cardId: string; readonly declaration: "unverified caller declaration" })[];   // per-card copies in deck order, each recorded as an unverified caller declaration (Req 3.26)
   readonly lastEntrySequence: number;
 }
 
@@ -828,7 +903,7 @@ export function checkTransition(from: RestorationState, to: RestorationState, vi
 // INVALID_TRANSITION naming current state, requested action, failed guard, when (from,to,via) is not in ALLOWED_TRANSITIONS
 ```
 
-The Restoration_Engine never stores its own approval flag; `deriveDeckState`'s `currentApproval` parameter is always read live from the domain `currentApproval(deck)` (Req 14.8). `RECORD_DECK_MISMATCH` from `integrityCheck` additionally fires specifically when a derived state and the domain's `ApprovalState` disagree about "approved" (Req 14.12). Every transition in the table above corresponds to exactly one requirement-14 criterion; `checkTransition` is called by every `Review_Service` function before it does any work, so an invalid transition never reaches a domain call (Req 14.9, 14.10, 14.11). While a region is `approved`, only `edit-cell` and `undo-action` may change its cells, and each appends an `unapproved` Approval_Record through the domain (`userEdit`, `undoEdit` or `withdrawInference`, Req 14.11). Withdrawing an accepted inference on an approved Deck is therefore the transition `approved` to `reviewed`, followed by `reviewed` to `proposed` for the withdrawn cells (see "Audit trail and undo").
+The Restoration_Engine never stores its own approval flag; `deriveDeckState`'s `currentApproval` parameter is always read live from the domain `currentApproval(deck)` (Req 14.8). `RECORD_DECK_MISMATCH` from `integrityCheck` additionally fires specifically when a derived state and the domain's `ApprovalState` disagree about "approved" (Req 14.12). Every transition in the table above corresponds to exactly one requirement-14 criterion; `checkTransition` is called by every `Review_Service` function before it does any work, so an invalid transition never reaches a domain call (Req 14.9, 14.10, 14.11). While a region is `approved`, only `edit-cell` and `undo-action` may change its cells, and each appends an `unapproved` Approval_Record through the domain (`userEdit`, `undoEdit` or `withdrawInference`, Req 14.11). Withdrawing an accepted inference on an approved Deck is the transition `approved` to `reviewed`. That `reviewed` is transient (Req 17.6c): the withdrawn cells return to `proposed` in the same operation, and the Deck state a caller reads afterwards is always `deriveDeckState` of Req 14.7 (so `proposed` while any withdrawn cell is `proposed`), never a stored `reviewed` (see "Audit trail and undo").
 
 ### Review actions and the Review_Service (requirement 15)
 
@@ -985,7 +1060,7 @@ Notes on the call sequence:
 
 The pre-check normally returns these codes before any domain call. The mapping table is the second line of defence and the one that applies to a failure that appears only inside a domain call.
 
-**State effect (Req 14.9, 14.11, 17.6c).** An `undo-action` on an accepted or selected Hypothesis of an approved Deck is reported as the transition `approved` to `reviewed`, because the domain appended an `unapproved` Approval_Record with cause `withdrawal`. The withdrawn cells then return to `proposed` (Req 17.6), which is the allowed follow-on transition `reviewed` to `proposed`. The Deck state derived afterwards follows the derivation rule of Req 14.7 from the domain Approval_State and the region states.
+**State effect (Req 14.9, 14.11, 17.6c).** An `undo-action` on an accepted or selected Hypothesis of an approved Deck is reported as the transition `approved` to `reviewed`, because the domain appended an `unapproved` Approval_Record with cause `withdrawal`. This `reviewed` is a transient step of the transition report only (Req 17.6c). The withdrawn cells return to `proposed` (Req 17.6), the allowed follow-on transition `reviewed` to `proposed`, and the Deck state derived afterwards always follows Req 14.7 from the domain Approval_State and the region states, so it is `proposed` when the withdrawn cells are `proposed` again. The example test for an approved Deck after a withdrawal pins this reading: it asserts the transient transition in the returned transition list and `proposed` from `deriveDeckState`, not `reviewed`.
 
 **Other audit rules** (Req 17.1, 17.2, 17.4, 17.8, 17.9, 17.12, 17.13): every entry carries Action_Id, Sequence_Number, kind, target, prior value/provenance/outcome, new values, note and the optional label; Action_Id and Sequence_Number are the sole authoritative order; no function in `src/restore` reads the system clock; an automatic (not-yet-reviewed) Hypothesis is never itself "undone" or withdrawn, because it was never written to the Deck. It stays `proposed`, `rejected-left-unknown` or `superseded`; no undo removes or modifies a Restoration_Record entry or a domain history entry; `undoEdit`'s domain-side multi-level-undo limit (Q4 below) is inherited unchanged for `edit-cell` entries, and the Live_Entry rule of `withdrawInference` is inherited unchanged for accepted inferences; the `RestorationRecord`'s length never decreases across any sequence of actions and undos (Property 6).
 
@@ -1011,6 +1086,8 @@ export interface EvidenceView {
   readonly syntheticPriorWarning: boolean;
   readonly verificationMarkers: readonly string[];
   readonly deckOrigin: DeckOrigin;
+  readonly attestationRefs?: readonly SyntheticAttestationRef[];   // attested cards whose evidence the view includes; absent when none
+  readonly syntheticDeckNotice?: typeof SYNTHETIC_DECK_NOTICE;      // present exactly when deckOrigin is "synthetic"
   readonly syntheticPriorEnablementsInEffect: readonly SyntheticPriorEnablementEntry[];
 }
 
@@ -1023,6 +1100,8 @@ export interface ConfidenceHeatmapEntry {
   readonly restorationState: RestorationState;
   readonly gridPosition: GridPosition;                     // from domain readIndexToGrid
   readonly syntheticPriorWarning: boolean;
+  readonly deckOrigin: DeckOrigin;
+  readonly attestationRefs?: readonly SyntheticAttestationRef[];   // attested card of this heatmap's card, if any
 }
 export interface ConfidenceHeatmapData {
   readonly cardId: string;
@@ -1033,7 +1112,7 @@ export interface ConfidenceHeatmapData {
 export function buildConfidenceHeatmap(record: RestorationRecord, deck: Deck, card: Card, profile: MachineProfile): ConfidenceHeatmapData;
 ```
 
-Both builders are pure functions of their inputs (Req 18.10): no rendering instruction, colour, or pixel appears anywhere in their output. When no `DetectionEvidenceInput` exists for a cell, `cropReference` is absent and the view states that no image evidence was available (Req 18.2). `holeProbability` and `hypothesisConfidence` are always separate named fields (Req 18.3). An `uncalibrated` status carries the marker in both the `EvidenceView` and every `ConfidenceHeatmapEntry` that depends on it (Req 18.4). Applied-override detail (Req 18.5), abstention detail (Req 18.6), the Grid_Position conversion through the domain's own `readIndexToGrid` (Req 18.7, never re-implemented), the `null`-vs-`0` distinction (Req 18.8), the separate hole-probability layer (Req 18.9), the copied verification markers (Req 18.11) and the synthetic-prior fields at both cell and deck level (Req 18.12–18.14) are all present as typed above.
+Both builders are pure functions of their inputs (Req 18.10): no rendering instruction, colour, or pixel appears anywhere in their output. When no `DetectionEvidenceInput` exists for a cell, `cropReference` is absent and the view states that no image evidence was available (Req 18.2). `holeProbability` and `hypothesisConfidence` are always separate named fields (Req 18.3). An `uncalibrated` status carries the marker in both the `EvidenceView` and every `ConfidenceHeatmapEntry` that depends on it (Req 18.4). Applied-override detail (Req 18.5), abstention detail (Req 18.6), the Grid_Position conversion through the domain's own `readIndexToGrid` (Req 18.7, never re-implemented), the `null`-vs-`0` distinction (Req 18.8), the separate hole-probability layer (Req 18.9), the copied verification markers (Req 18.11) and the synthetic-prior fields at both cell and deck level (Req 18.12–18.14) are all present as typed above. For a validated synthetic deck, `deckOrigin: "synthetic"`, the `attestationRefs` of the cards involved (a card without an attestation has no image evidence, and the view says so) and (in the Evidence_View) the Synthetic_Deck_Notice appear in every view and heatmap entry, so the UI can show its "Simulated demo card" badge from data (Req 3.25).
 
 ### Determinism and the leakage guard (requirement 19)
 
@@ -1075,7 +1154,7 @@ export function exportCalibrationRecord(r: CalibrationRecord): RestorationResult
 export function importCalibrationRecord(text: string): RestorationResult<CalibrationRecord>;
 ```
 
-All three exporters use the same canonical-JSON approach as the domain and vision designs: a schema-ordered writer, two-space indent, `\n` line endings, no timestamps, `null` confidence written as the literal `null` and never coerced to `0`, `opaqueTimestampLabel` written only as a plain string field where present and excluded from any digest. Import check order (first failure wins, nothing partial, Req 21.2): size (`INPUT_TOO_LARGE`), syntax (`INVALID_JSON`), `format` (`INVALID_FORMAT`), `schemaVersion` (`UNSUPPORTED_SCHEMA_VERSION`), unknown field (`UNKNOWN_FIELD`, path), then semantic validation (`INVALID_RESTORATION_RECORD` naming the first violated invariant: confidence outside [0,1]; a numeric confidence on a Hypothesis with provenance `"observed"` — structurally impossible by the `Hypothesis` type's own provenance union, so this check guards only against a corrupted/hand-edited file; more than three Hypotheses in a region; a non-contiguous Sequence_Number; a duplicate Action_Id; a Review_Action referencing a missing entry). Round-trip (export, import, export) is byte-identical for every valid value of all three types (Req 21.8). No image pixels or `Original_Image` are ever embedded (Req 21.11).
+All three exporters use the same canonical-JSON approach as the domain and vision designs: a schema-ordered writer, two-space indent, `\n` line endings, no timestamps, `null` confidence written as the literal `null` and never coerced to `0`, `opaqueTimestampLabel` written only as a plain string field where present and excluded from any digest. Import check order (first failure wins, nothing partial, Req 21.2): size (`INPUT_TOO_LARGE`), syntax (`INVALID_JSON`), `format` (`INVALID_FORMAT`), `schemaVersion` (`UNSUPPORTED_SCHEMA_VERSION`), unknown field (`UNKNOWN_FIELD`, path), then semantic validation (`INVALID_RESTORATION_RECORD` naming the first violated invariant: confidence outside [0,1]; a numeric confidence on a Hypothesis with provenance `"observed"` — structurally impossible by the `Hypothesis` type's own provenance union, so this check guards only against a corrupted/hand-edited file; more than three Hypotheses in a region; a non-contiguous Sequence_Number; a duplicate Action_Id; a Review_Action referencing a missing entry; and, for the attestation data, `deckOrigin` `"real"` with any entry in `syntheticAttestations` or any `attestationRefs` anywhere in the record; `deckOrigin` `"synthetic"` with a card that has an image digest in the run sections (`perCardImageDigests`) and no entry for that `cardId`, or an entry whose `imageDigest` differs from that card's digest; an entry whose `cardId` is not a card of the record or has no image digest; an entry that fails the field rules of `validateSyntheticAttestation`; a duplicate `cardId` among the entries; an `attestationRefs` item whose `cardId`, `sourceId` or `imageDigest` differs from the record's entry for that card; a Hypothesis of a `"synthetic"` record whose explanation lacks `SYNTHETIC_DECK_NOTICE`; a `syntheticPriorWarning` of `true` on a Hypothesis of a `"synthetic"` record). Round-trip (export, import, export) is byte-identical for every valid value of all three types (Req 21.8). No image pixels or `Original_Image` are ever embedded (Req 21.11). The new serialised fields are `deckOrigin` and optional `syntheticAttestations` on the record (an array of per-card entries in deck order, each with `cardId` first; key order: after `syntheticPriorEnablements`, before `lastEntrySequence`), `deckOrigin` and optional `attestationRefs` on each Hypothesis, and `attestationRefs` inside each `PriorGateState` copy. An absent or empty attestation list is omitted, never written as `null`. Corruption handling follows the existing order: an unknown key inside an entry is `UNKNOWN_FIELD` naming its path (for example `syntheticAttestations[0].extra`), a wrong-typed field (for example a non-integer `seed`) is `INVALID_RESTORATION_RECORD` naming the path, and truncation is `INVALID_JSON`. The `schemaVersion` stays 1 because records written before this amendment lack only optional fields, except `deckOrigin`, which the importer defaults to `"real"` when absent (the only value a pre-amendment record could carry).
 
 ### Error registry and abstention codes (requirement 22)
 
@@ -1111,6 +1190,8 @@ Both registries are closed tuples with a stable message per code in `RESTORATION
 | UI (spec 5) | `applyReviewAction`, `approveDeck`, `buildEvidenceView`, `buildConfidenceHeatmap`, `deriveCellState`/`deriveRegionState`/`deriveDeckState`, the unresolved-item list (`unresolvedAppliedOverrides`, `pendingCorrections`), `CalibrationStatus` markers, `PriorGateState`, `recordSyntheticPriorEnablement`/the enablement entries and `SYNTHETIC_PRIOR_WARNING_TEXT`, verification markers, `RESTORATION_ERROR_MESSAGES`/`ABSTENTION_REASONS` messages, the three serialisers | Exactly the functions and types named in requirements.md's "Dependencies for later specs → ui" row, all re-exported from `src/restore/index.ts`. For benchmark results the UI consumes the benchmark spec's `BrowserReport` and does not call restoration metric functions. |
 | Benchmark (spec 4) | `runInference` (pure, no worker, no UI; the "restore()" entry point), `RestorationConfig` schema and defaults, `maskCell`/`isMasked` (the masking contract), `Hypothesis`/`Abstention` with both `rawConfidence` and `hypothesisConfidence` for every region, `PriorMeasurement`/`CalibrationRecord` schemas and validators, `importMinimalDataset` and `permitTuningRole` (so the benchmark's tuning export can be checked against the same format and role names) | Benchmark imports `src/restore` through its public index only. It drives `runInference` over masked synthetic/real decks, supplies no ground truth to inference, reads raw (uncalibrated) confidence for its own accuracy and ECE computation, writes one Minimal_Dataset_Format file set per role (only `tuning` and `calibration` for restoration), and is the only producer of official `held-out` and `test` metrics. `src/restore` never imports `src/benchmark`. |
 
+**Attestation attachment (Req 3.21 to 3.26).** The benchmark runner builds one `SyntheticImageAttestation` per card with a generated image from its dataset manifest and passes them in `RestorationInput.syntheticAttestations`, keyed by `cardId`. The UI (Workbench) attaches an entry only for a bundled card image whose digest matches its committed Demo_Bundle manifest, never for an uploaded file (uploads always run with `deckOrigin: "real"`), supplies none for the simulated intact context cards that carry no image evidence, and shows a persistent "Simulated demo card" badge from `deckOrigin`, `attestationRefs` and the Synthetic_Deck_Notice. Each attestation is an unverified caller declaration; `src/restore` validates and records it and never creates one. The index also exports `SyntheticImageAttestation`, `SyntheticAttestationRef`, `SYNTHETIC_DECK_NOTICE`, `validateSyntheticAttestation` and `validateOriginAndAttestation`. These are additive and made before the interface freeze, so `RESTORATION_INTERFACE_VERSION` stays `"1.0.0"`.
+
 **Evaluation support (Req 24.1, 24.3).** `src/restore` exposes per-region outputs (Hypotheses, Abstentions, raw and calibrated confidence) so the benchmark can compute damaged-cell accuracy, calibration error, abstention rate and whole-card recovery rate, each with benchmark version, seed, split role and sample size. Restoration computes no official `held-out` or `test` metric. Neither `src/restore` nor the tuning script tunes or calibrates on `held-out` or `test`, and synthetic and real evaluations are reported in separate sections and never pooled. An abstention counts as not correct in accuracy over all targets, and accuracy over answered targets is reported separately with its coverage.
 
 `RESTORATION_INTERFACE_VERSION = "1.0.0"` is exported; any exported-signature change after approval requires a spec update (Req 23.4). `src/restore` imports from `src/domain` only through its public index (Req 23.5) and never duplicates a domain type (every type above either reuses a domain type by name — `Deck`, `Card`, `Cell`, `EffectiveView`, `ActionId`, `SequenceNumber`, `Bit`, `Provenance`, `ApprovalState`, `MachineProfile`, `GridPosition` — or is a restoration-specific type with no domain equivalent). The import-boundary test and the forbidden-API scan (Req 23.6, 23.7) are described above under "Dependency rule and import-boundary test". A Web Worker adapter, if one is added in the UI or workers layer, exchanges only typed, versioned, structured-cloneable messages built from the types above and contains no inference logic itself (Req 23.8) — `src/restore` defines no worker protocol of its own, reusing the detection spec's protocol pattern only as a precedent, not as a dependency.
@@ -1130,7 +1211,7 @@ The `within-card` partner mapping function is defined once, generically, over an
 
 *A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
-Properties P23 to P25 were appended by the amendment for requirement 26 (and 10.6); P1 to P22 are not renumbered.
+Properties P23 to P25 were appended by the amendment for requirement 26 (and 10.6). Properties P26 and P27 were appended by the attestation amendment (requirements 3.21 to 3.26 and 25.23 to 25.28). P1 to P22 are not renumbered.
 
 Reflection on redundancy: requirement 25 of requirements.md already enumerates the test suite's required properties one for one (25.1–25.22). Rather than re-deriving a second, overlapping property list from requirements 1–24's individual criteria and then merging it against requirement 25 (which would double-count roughly twenty properties, exactly the redundancy the sibling domain and vision designs warn against), this section defines P1–P22 directly from requirement 25's list, and the traceability table at the end maps every criterion of requirements 1–24 onto the property (or properties) that already covers it. A handful of requirement-25 items are themselves one property each with no merge needed; none were found to be redundant with each other, because each names a distinct mechanism (raw preservation, bounds, unknown-stays-unknown, approval-exactness, undo, recovery, structure-free, gating, leakage, determinism, hypotheses shape, protection, state-machine, round-trip/corruption, metamorphic, golden, counterexample conversion, synthetic-prior).
 
@@ -1166,7 +1247,7 @@ For all sequences of Review_Actions ending in a successful approval, the effecti
 
 ### Property 6: Undo and withdrawal restore prior state and never shrink the record
 
-For all sequences of up to 20 Review_Actions and undos on a valid Deck (approved or unapproved), the Restoration_Record and the domain Edit_History never shrink and earlier entries stay equal; the Raw_Observation is unchanged on every path; an undo of `edit-cell` (through `undoEdit`) restores the prior effective value, provenance, Review_Outcome and Approval_State of its target in the Effective_View; an undo of `accept-hypothesis` or `select-alternative` (through `withdrawInference`, once per cell, with Action_Id `<actionId>#<cardId>#<readIndex>`) restores each cell to the effective value or its absence, provenance, Restoration_Confidence (including `null`, never coerced to `0`) and evidence it had before the reversed action and returns the cells to `proposed`; an undo of `reject-hypothesis` makes no domain call; and when any cell of the region fails the pre-check, no cell is written. Example tests cover a withdrawal blocked by an un-reversed user edit (`USER_EDIT_PROTECTED`), a second undo of the same acceptance (`NOTHING_TO_UNDO`), and an approved Deck that becomes `unapproved` after a withdrawal.
+For all sequences of up to 20 Review_Actions and undos on a valid Deck (approved or unapproved), the Restoration_Record and the domain Edit_History never shrink and earlier entries stay equal; the Raw_Observation is unchanged on every path; an undo of `edit-cell` (through `undoEdit`) restores the prior effective value, provenance, Review_Outcome and Approval_State of its target in the Effective_View; an undo of `accept-hypothesis` or `select-alternative` (through `withdrawInference`, once per cell, with Action_Id `<actionId>#<cardId>#<readIndex>`) restores each cell to the effective value or its absence, provenance, Restoration_Confidence (including `null`, never coerced to `0`) and evidence it had before the reversed action and returns the cells to `proposed`; an undo of `reject-hypothesis` makes no domain call; and when any cell of the region fails the pre-check, no cell is written. Example tests cover a withdrawal blocked by an un-reversed user edit (`USER_EDIT_PROTECTED`), a second undo of the same acceptance (`NOTHING_TO_UNDO`), and an approved Deck that becomes `unapproved` after a withdrawal, where the transient `approved` to `reviewed` transition is reported and the derived Deck state is `proposed` per Req 14.7.
 
 **Validates: Requirements 17.5, 17.6, 17.6a, 17.6b, 17.6c, 17.8, 17.9, 17.13, 17.15, 17.16, 25.9**
 
@@ -1190,15 +1271,15 @@ For all configurations with a Structural_Prior kind disabled or lacking a valid 
 
 ### Property 10: No leakage from masked ground truth
 
-For all decks built by masking a truth deck, the restoration output is deeply equal across two truth decks that differ only in the masked cells' true values, and a static test confirms no `src/restore` module imports a ground-truth, benchmark or damage module.
+For all decks built by masking a truth deck, including attested synthetic decks, the restoration output is deeply equal across two truth decks that differ only in the masked cells' true values, and a static test confirms no `src/restore` module imports a ground-truth, benchmark or damage module.
 
-**Validates: Requirements 19.4, 19.6, 25.13**
+**Validates: Requirements 19.4, 19.6, 25.13, 25.28**
 
 ### Property 11: Determinism
 
-For all inputs, two runs produce deeply equal Restoration_Records, byte-identical exported text, and deeply equal Decks, with the Opaque_Timestamp_Label excluded from the comparison.
+For all inputs, including attested synthetic runs, two runs produce deeply equal Restoration_Records, byte-identical exported text, and deeply equal Decks, with the Opaque_Timestamp_Label excluded from the comparison.
 
-**Validates: Requirements 19.1, 25.14**
+**Validates: Requirements 19.1, 25.14, 25.28**
 
 ### Property 12: Hypothesis shape invariants
 
@@ -1284,9 +1365,21 @@ For all pairs of calibration and tuning file-set lists, `checkFileSetsDisjoint` 
 
 **Validates: Requirements 10.6, 26.4**
 
+### Property 26: Attestation validity and rejection cases
+
+For all decks of 3 to 12 cards, some with Detection_Evidence carrying an `Image_Digest` and some without, and all `syntheticAttestations` maps: (a) with `deckOrigin` `synthetic`, an entry whose `imageDigest` differs from its card's evidence digest, or that lacks or empties any field, or has a non-integer `seed`, or a malformed `parametersDigest` or `imageDigest`, returns `INVALID_CONFIGURATION` naming `syntheticAttestations[<cardId>]` and the first failing field in the order of `validateOriginAndAttestation`, and produces no Hypothesis and no record; (b) with `deckOrigin` `synthetic`, a card that has an `Image_Digest` and no entry returns `INVALID_CONFIGURATION` naming `syntheticAttestations[<cardId>]` of the first such card in deck order, and a deck whose cards without an `Image_Digest` have no entry is valid; (c) with `deckOrigin` `real`, any entry returns `INVALID_CONFIGURATION` naming `syntheticAttestations[<cardId>]` of the first entry; (d) with `deckOrigin` `synthetic`, an entry keyed by a `cardId` that is not in the deck, or by a card whose Detection_Evidence has no `Image_Digest`, returns `INVALID_CONFIGURATION` naming `syntheticAttestations[<cardId>]`. A valid map (one matching entry per card with an `Image_Digest`, including a mixed deck of intact context cards without evidence plus one attested damaged card) passes this validation, and no new Restoration_Error_Code is used.
+
+**Validates: Requirements 3.21, 3.22, 3.23, 3.26, 25.23, 25.24, 25.25**
+
+### Property 27: Attested synthetic decks use the prior without warning, and real decks are unchanged
+
+For all decks with a known Repeat_Period, `deckOrigin` `synthetic`, valid per-card attestations for every card with an `Image_Digest` (including mixed decks whose context cards have no image evidence) and a valid synthetic-scope Prior_Measurement, a run with the prior enabled and no `enable-synthetic-prior` entry produces Hypotheses with `syntheticPriorWarning` false, the `SYNTHETIC_DECK_NOTICE` in each explanation, `deckOrigin` and the per-card attestation references in the record, every Evidence_View and every heatmap entry, and Calibration_Status `uncalibrated`; the same run without the Prior_Measurement returns `PRIOR_MEASUREMENT_MISSING`. For all `deckOrigin` `real` decks, outputs and errors equal those required by Requirements 3.14 to 3.19, so the attestation mechanism changes nothing for real decks (a `real` run with and without the code path produces deeply equal results).
+
+**Validates: Requirements 3.24, 3.25, 3.26, 25.26, 25.27**
+
 ### Seed and generator register
 
-Each property is a single `fc.assert(fc.property(...), { seed, numRuns })`. Seeds are distinct constants `20260500 + n`, continuing the numbering convention of the domain (`20260100+`) and vision (`20260200+`) specs. `numRuns` never exceeds 500. Generators live in `src/restore/__tests__/generators.ts`.
+Each property is a single `fc.assert(fc.property(...), { seed, numRuns })`. The block start 20260500 matches requirement 25.1 (golden tests 20260600). Seeds are distinct constants `20260500 + n`, continuing the numbering convention of the domain (`20260100+`) and vision (`20260200+`) specs. `numRuns` never exceeds 500. Generators live in `src/restore/__tests__/generators.ts`.
 
 | Property | Seed | numRuns | Generator precondition (stated in a comment beside the test) |
 |----------|------|---------|-----------------------------------------------------------|
@@ -1315,6 +1408,8 @@ Each property is a single `fc.assert(fc.property(...), { seed, numRuns })`. Seed
 | P23 | 20260523 | 300 | `arbRoleString` (four valid roles, case variants, empty, arbitrary text) x `arbTuningPurpose`; reader instrumented to throw on any cell access |
 | P24 | 20260524 | 200 | `arbMinimalDatasetFile` valid, plus `arbExtraField` (generated path and name, excluding `familyKey`/`splitRole`), `arbSplitRole` |
 | P25 | 20260525 | 300 | `arbFileSetRefList` pairs, with seeded shared-id and identical-list cases |
+| P26 | 20260526 | 300 | `arbAttestedInput`: deck of 3 to 12 cards where a generated subset has evidence digests (the rest are context cards without evidence), `deckOrigin`, and a `syntheticAttestations` map with at most one seeded violation (missing or empty field, non-integer seed, malformed digest, digest mismatch, entry on a real deck, entry keyed by a card without an evidence digest or by an unknown `cardId`, a card with an evidence digest and no entry) |
+| P27 | 20260527 | 100 | `arbPeriodicDeck` with `deckOrigin` `synthetic`, valid per-card attestations (mixed decks included) and synthetic-scope `arbPriorMeasurement`; paired with `arbRealDeck` runs compared against the pre-amendment gate outcomes of P19 |
 
 
 ## Error Handling
@@ -1349,9 +1444,11 @@ One property test per Correctness Property (P1–P22), each a single `fc.assert(
 - One example test per `RestorationErrorCode` and per `AbstentionReasonCode` (Req 22.5).
 - Worked examples for the log-odds combination formula (hand-computed expected `combinedP` for a small table of `P_struct`/`P_image` pairs), including the Laplace-smoothing boundary (`supportingCount` 0 and 1).
 - Histogram-binning `applyCalibration` worked example: a fixed 10-bin `CalibrationRecord` and a table of raw confidences mapped to expected calibrated values, including the "no matching valid prior kind" and "support count out of range" fallback-to-uncalibrated cases.
-- `evaluatePriorGate` worked examples for each of the six branches in its pseudocode (disabled, missing measurement, real+synthetic-only+enabled, real+synthetic-only+disabled/absent, synthetic+evaluation-context+synthetic-only, plain real/non-synthetic-only).
+- `evaluatePriorGate` worked examples for each branch in its pseudocode (disabled, missing measurement, real+synthetic-only+enabled, real+synthetic-only+disabled/absent, validated synthetic (per-card attestations)+synthetic-only with and without `syntheticEvaluationContext`, synthetic without image evidence in an evaluation context, plain real/non-synthetic-only).
+- Attestation regression examples (Req 25.25): (a) a `synthetic` deck with image evidence on one card and no entry for it returns `INVALID_CONFIGURATION` naming `syntheticAttestations[<cardId>]`; (b) a mixed deck of several context cards without Detection_Evidence plus one damaged card with image evidence and a matching entry is valid; (c) a deck of two cards with image evidence, one attested and one not, returns `INVALID_CONFIGURATION` naming the unattested `cardId`; (d) the same mixed deck as (b) with `deckOrigin` `real` and the entry supplied returns `INVALID_CONFIGURATION`.
+- Further attestation examples (Req 3.21 to 3.26): one example per failing field in the check order of `validateOriginAndAttestation`; an entry keyed by a `cardId` that is not in the deck, and one keyed by a card with no `Image_Digest`, each return `INVALID_CONFIGURATION` naming `syntheticAttestations[<cardId>]`; a validated synthetic deck with the prior enabled and no Prior_Measurement returns `PRIOR_MEASUREMENT_MISSING`; a record round trip that carries per-card attestations, and an import that drops the entry of the attested card from a synthetic record fails with `INVALID_RESTORATION_RECORD`; a golden check that the explanation on a synthetic deck ends with `SYNTHETIC_DECK_NOTICE` before the calibration sentence. A static test confirms no `src/restore` code constructs a `SyntheticImageAttestation` (only validates and copies one).
 - Region segmentation worked examples: a card with no Target_Cells, one of all Target_Cells (routed to whole-card recovery), one with Protected_Cells splitting two regions, one with a region exactly at `shortRegionBound` (accepted) and one at `shortRegionBound + 1` (abstains).
-- Undo example tests (Req 25.9): (1) withdrawal blocked by an un-reversed user edit above the accepted inference returns `USER_EDIT_PROTECTED` and the Deck and record are deeply equal to their earlier values; (2) a second `undo-action` for the same acceptance returns `NOTHING_TO_UNDO`; (3) an approved Deck becomes `unapproved` (cause `withdrawal`) after the undo of an accepted Hypothesis, and the reported transition is `approved` to `reviewed`. Further examples: a pre-check failure at the last cell of a multi-cell region writes nothing to earlier cells; the previous `null` confidence returns as `null` after withdrawal; the domain `INTERFACE_VERSION` is at least 1.1.0.
+- Undo example tests (Req 25.9): (1) withdrawal blocked by an un-reversed user edit above the accepted inference returns `USER_EDIT_PROTECTED` and the Deck and record are deeply equal to their earlier values; (2) a second `undo-action` for the same acceptance returns `NOTHING_TO_UNDO`; (3) an approved Deck becomes `unapproved` (cause `withdrawal`) after the undo of an accepted Hypothesis, and the reported transition is `approved` to `reviewed`, which is transient (Req 17.6c): the same test asserts that `deriveDeckState` returns `proposed` afterwards per Req 14.7 and not `reviewed`. Further examples: a pre-check failure at the last cell of a multi-cell region writes nothing to earlier cells; the previous `null` confidence returns as `null` after withdrawal; the domain `INTERFACE_VERSION` is at least 1.1.0.
 - Compile-time test: `// @ts-expect-error` shows a `ReadIndex`-shaped domain value is not accepted where a restoration `CellRef.readIndex: number` is expected without going through the domain's own branded-type constructors — documents that `src/restore` deliberately uses plain `number` for `readIndex` at its own boundary (matching `InferenceInput`'s own `readIndex: number` field in the domain design) rather than re-branding it.
 - Tuning-script examples (Req 26): `held-out`, `test` and an unknown role name (for example `"validation"`) each return `ROLE_NOT_PERMITTED_FOR_TUNING` naming the role; a calibration file set that equals the tuning set and one that shares a single id each return `FILE_SET_OVERLAP`; a file with `familyKey` and `splitRole` imports unchanged; a file with a stray field returns `UNKNOWN_FIELD` with its path; a `splitRole` of `calibration` supplied under `tuning` returns `SPLIT_ROLE_MISMATCH`. A CLI smoke test runs `restoration-tune.ts` on a tiny committed fixture and on a refused role, and checks exit codes and that no artifact is written on refusal.
 - Registry-sync test (Req 26.8, 26.9): every committed Prior_Measurement and Calibration_Record JSON has a row in `docs/restoration-priors.md` listing its role or roles and `datasetVersion`, and the test fails when a committed artifact has no row or a row names a role or dataset version that differs from the artifact.
@@ -1395,7 +1492,8 @@ Carried forward unchanged from requirements.md's own table, plus one restoration
 - **Q5 (resolved by the user, no further confirmation needed).** Implemented in full under "Prior gate and synthetic enablement" and verified by Property 19.
 - **[CONFIRM] Q6 Keeping `DetectionEvidenceInput` in sync with `CardDetectionRecord`.** This design resolves the import question (structural types, no `src/vision` import — matching the recommendation already in `card-domain-and-loom-engine/design.md` and `card-detection/design.md`) with no further confirmation needed on the *approach*. What remains open is process: `DetectionEvidenceInput`'s field list must be manually kept a structural subset of `CardDetectionRecord` as the detection spec evolves, since TypeScript's structural typing gives no automatic warning if the two diverge in an incompatible way (for example, if `CardDetectionRecord.perCell[].condition` were ever renamed). Options: (a) accept the manual-sync risk, covered only by the compile-time `// @ts-expect-error`-style assignability test already listed under "Unit and example tests"; (b) add a small `satisfies`-style compile-time check in `card-detection`'s own test suite asserting `CardDetectionRecord satisfies DetectionEvidenceInput`-shaped compatibility (requires a `card-detection` spec/code change, out of scope for this document to mandate). Recommended: (a) now, revisit (b) only if a real divergence bug occurs.
 - **Q7 Location of `scripts/restoration-tune.ts` (folder part resolved).** `structure.md` now lists `scripts` (thin TypeScript CLI entry points that may import the public index of any `src` folder; no `src` folder imports `scripts`), so `scripts/restoration-tune.ts` needs no further steering change. What stays open is only where the committed Prior_Measurement and Calibration_Record JSON artifacts live. The benchmark spec commits its own reports under `data/benchmark`. **[CONFIRM] Q7a:** put restoration artifacts under a new `data/restoration/` sub-folder with a README stating source, licence and roles (recommended, since `data` already exists and `structure.md` requires a README for folders with third-party material), or place them beside the benchmark's committed outputs in `data/benchmark`.
-- **[CONFIRM] Q8 Seed-block start (pending user confirmation, unchanged by this amendment).** `requirements.md` 25.1 specifies a seed block starting at 20260400. This design's register uses 20260500 and later (continuing after the vision block at 20260200 and keeping clear of the benchmark's 20260700). The two documents disagree. Recommended: change requirement 25.1 to 20260500, or move this register to 20260400. Left as is until the user decides.
+- **Q8 Seed-block start (resolved).** Plan amendment A0-6: the block starts at 20260500 (golden tests 20260600), matching requirement 25.1 and this design's register. No confirmation is needed.
+- **Q9 Attestation granularity (resolved by the user, plan finding C-18).** Attestations are per card: `RestorationInput.syntheticAttestations` maps `cardId` to an attestation (see "Synthetic image attestation"). A card without an `Image_Digest` needs none, so the demo deck of simulated intact context cards plus one detected damaged card is valid. No further confirmation is needed.
 
 ## Requirements traceability
 
@@ -1403,7 +1501,9 @@ Carried forward unchanged from requirements.md's own table, plus one restoration
 |-------------|-----------------|
 | 1.1 to 1.10 | `RestorationInput`, `validateConfig`, `validateLimits`, `DetectionEvidenceInput` mismatch checks, `RunSection` recorded digests/markers |
 | 2.1 to 2.12 | `isProtectedCell`/`isTargetCell`/`isTrustedCell`, `segmentRegions`; P13 |
-| 3.1 to 3.21 | `gating/priorGate.ts`, `PriorMeasurement` (now with `datasetVersion` and `splitRole`, 3.4), `SyntheticPriorEnablementEntry`; P9, P19, P22 |
+| 3.1 to 3.20 | `gating/priorGate.ts`, `PriorMeasurement` (now with `datasetVersion` and `splitRole`, 3.4), `SyntheticPriorEnablementEntry`; P9, P19, P22 |
+| 3.21 to 3.23 | `gating/attestation.ts`: `validateConfig` (first clause), `validateOriginAndAttestation`, `validateSyntheticAttestation`, `RestorationInput.syntheticAttestations` (per card, errors name `syntheticAttestations[<cardId>]`); P26 |
+| 3.24 to 3.26 | `evaluatePriorGate` validated-synthetic branch, `SyntheticAttestationRef` (per card), `SYNTHETIC_DECK_NOTICE`, `deckOrigin`/`attestationRefs` on `Hypothesis`, `RestorationRecord`, `EvidenceView`, `ConfidenceHeatmapEntry`, `CalibrationRecord.scope`, serialisation fields; P27 |
 | 4.1 to 4.10 | `inference/repeat.ts`; P7, P8 |
 | 5.1 to 5.9 | `inference/symmetry.ts`; P7, P8 |
 | 6.1 to 6.9 | `inference/imageEvidence.ts`, `inference/combine.ts`; P16 |
@@ -1417,7 +1517,7 @@ Carried forward unchanged from requirements.md's own table, plus one restoration
 | 14.1 to 14.12 | `review/stateMachine.ts`, `ALLOWED_TRANSITIONS` (including `approved` to `reviewed` by user edit, withdrawal or revoke); P6, P14 |
 | 15.1 to 15.11 | `review/service.ts`, `applyReviewAction` |
 | 16.1 to 16.12 | `approveDeck`; P5 |
-| 17.1 to 17.16 | "Audit trail and undo": `undoReviewAction`, all-cells pre-check, per-cell ids `<actionId>#<cardId>#<readIndex>`, error mapping table, `AuditEntry`; P6 |
+| 17.1 to 17.16 | "Audit trail and undo": `undoReviewAction`, all-cells pre-check, per-cell ids `<actionId>#<cardId>#<readIndex>`, error mapping table, `AuditEntry`; the transient `reviewed` of 17.6c in the state-machine note and the "State effect" paragraph; P6 |
 | 18.1 to 18.14 | `evidence/evidenceView.ts`, `evidence/heatmap.ts` |
 | 19.1 to 19.8 | `determinism/ordering.ts`, `determinism/leakageGuard.ts`; P10, P11 |
 | 20.1 to 20.5 | `limits.ts`, `RESTORATION_LIMITS`, `validateLimits` |
@@ -1425,7 +1525,11 @@ Carried forward unchanged from requirements.md's own table, plus one restoration
 | 22.1 to 22.6 | `result.ts`, `RESTORATION_ERROR_CODES`, `ABSTENTION_REASONS` |
 | 23.1 to 23.8 | "Interfaces for later specs and module boundaries", import-boundary test |
 | 24.1 to 24.6 | "Deferred numeric defaults", "Evaluation support (Req 24.1, 24.3)" in the interfaces section, `scripts/restoration-tune.ts`, docs tables |
-| 25.1 to 25.22 | Correctness Properties P1–P22 (direct mapping, see section header); 25.9 is P6 (both undo paths and its three example tests). Seed-block start is open: see Q8 |
+| 25.1 to 25.22 | Correctness Properties P1–P22 (direct mapping, see section header); 25.9 is P6 (both undo paths and its three example tests). Seed block 20260500 resolved (Q8) |
+| 25.23, 25.24 | P26 (per-card mismatch and misuse cases) |
+| 25.25 | The four attestation regression examples (a) to (d) in the unit tests, covering the mixed-deck valid case and the unattested-card and real-deck rejections |
+| 25.26, 25.27 | P27 (attested synthetic prior behaviour including mixed decks; real decks unchanged) |
+| 25.28 | P10 and P11 extended to attested synthetic runs |
 | 26.1 to 26.9 | "Tuning script, role allow-list and Minimal_Dataset_Format", `tuning/roles.ts`, `tuning/datasetFormat.ts`, `scripts/restoration-tune.ts`, `docs/restoration-priors.md` registry; P23, P24, P25, tuning-script and registry-sync tests |
 
 ## Amendment record
@@ -1440,3 +1544,28 @@ Targeted amendment to match the amended `requirements.md` (requirements 3.4, 10.
 - Official `held-out` and `test` metrics come only from the benchmark runner. Interface table: benchmark is spec 4 and consumes `runInference`, `CalibrationRecord` and the masking contract through the public index only. The UI is spec 5 and consumes the benchmark `BrowserReport`.
 - Added properties P23 to P25 (seeds 20260523 to 20260525), updated P22, added tuning-script, registry-sync and ECE tests, and traceability rows for requirement 26 and the changed criteria.
 - Open questions: Q7 folder part resolved, Q7a (artifact location) added, Q8 records the unchanged seed-block disagreement (requirements 25.1 says 20260400, this design uses 20260500) for user confirmation.
+
+### Second amendment (plan amendments A0-4 and A0-6, docs/PLAN.md Section 5.3)
+
+Targeted amendment to match the second amendment of `requirements.md`. Numbering is unchanged. `tasks.md` and `requirements.md` are not touched by this edit, and `tasks.md` needs a follow-up update.
+
+- Decisions table: added the attestation row. Synthetic data is never marked `real` to pass validation.
+- Module layout: added `gating/attestation.ts`.
+- `RestorationInput` gains optional `syntheticAttestation: SyntheticImageAttestation` (generator, generatorVersion, sourceId, seed, parametersDigest, imageDigest). New section "Synthetic image attestation" defines `validateSyntheticAttestation`, `validateOriginAndAttestation`, its first-failure-wins order and `INVALID_CONFIGURATION` paths (missing attestation, attestation on a real deck or a deck with no `Image_Digest`, field failures, digest mismatch), who attaches an attestation (benchmark from its manifest; Workbench only for bundled assets with matching manifest digests, never uploads), and the statement that it is an unverified caller declaration. No new error code.
+- `evaluatePriorGate` gains an attested-synthetic branch: no enablement entry, `syntheticPriorWarning` false, `PRIOR_MEASUREMENT_MISSING` still applies, real decks unchanged. `PriorGateState` carries `deckOrigin` and `attestationRef`.
+- `deckOrigin` and `attestationRef` added to `Hypothesis`, `RestorationRecord` (with the attestation copy), `EvidenceView` and `ConfidenceHeatmapEntry`. Added `SYNTHETIC_DECK_NOTICE`, appended to explanations on attested decks. `CalibrationRecord` gains an optional `scope`, so `uncalibrated` holds unless a synthetic-scope record applies.
+- Serialisation: new fields, importer invariants and corruption handling for the attestation data.
+- 17.6c: the `reviewed` state after a withdrawal is transient. The state-machine note, the "State effect" paragraph, P6 and the undo example test now pin that the derived Deck state follows 14.7.
+- Added P26 (attestation validity and rejection) and P27 (attested synthetic prior behaviour; real decks unchanged) with seeds 20260526 and 20260527. Extended P10 and P11 to attested runs. Extended the seed register, unit tests and traceability (3.21 to 3.26, 25.23 to 25.28).
+- Open questions: Q8 resolved (seed block 20260500). Q9 added as [CONFIRM] (one attestation per deck).
+
+### Third amendment (open question Q9, plan finding C-18, approved by the user)
+
+Targeted amendment to match the third amendment of `requirements.md`. Numbering is unchanged. `requirements.md` and `tasks.md` are not touched by this edit, and `tasks.md` needs a follow-up update. The second-amendment bullets above describe the single-attestation form that this amendment replaces.
+
+- `RestorationInput.syntheticAttestation` is replaced by `syntheticAttestations: ReadonlyMap<cardId, SyntheticImageAttestation>`. A card without an `Image_Digest` needs no entry, so mixed decks (intact context cards without evidence plus one attested damaged card) are valid.
+- `validateOriginAndAttestation` is rewritten per card (Req 3.21 to 3.23): real deck with any entry, unknown `cardId`, card without an `Image_Digest`, field failures, digest mismatch, and a card with an `Image_Digest` and no entry. Errors are `INVALID_CONFIGURATION` naming `syntheticAttestations[<cardId>]` (plus `.<field>` where a field is the cause), evaluated in deck order, then by `cardId` for keys absent from the deck. No new error code. `validateSyntheticAttestation` now checks one entry's fields only.
+- `SyntheticAttestationRef` gains `cardId`. `attestationRef` becomes `attestationRefs` on `PriorGateState` (all attested cards), `Hypothesis`, `EvidenceView` and `ConfidenceHeatmapEntry`. `RestorationRecord.syntheticAttestation` becomes the per-card list `syntheticAttestations`. `evaluatePriorGate` takes the validated map. The Synthetic_Deck_Notice applies to every Hypothesis of a validated synthetic deck.
+- Serialisation: per-card entries, importer invariants (per-card coverage, unknown or duplicate `cardId`, ref consistency) and corruption paths such as `syntheticAttestations[0].extra`.
+- P26 and P27 rewritten per card with the mixed-deck cases and the generator register updated. The four regression examples of requirement 25.25 are listed in the unit tests. Traceability rows 3.21 to 3.23 and 25.23 to 25.25 updated.
+- Q9 resolved; its [CONFIRM] is removed.
