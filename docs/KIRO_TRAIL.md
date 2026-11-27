@@ -127,3 +127,39 @@ Verified record of how Kiro was used to build Loom Lazarus. Procedure: `.kiro/st
 - Screenshots: none
 - Commits: ca45a4f, b4f8388, this entry's commit; tag `domain-freeze-1.1.0`
 - Decisions: new error codes `DECK_SHAPE_MISMATCH`, `CARD_INDEX_OUT_OF_RANGE`, `INVALID_APPROVAL_HISTORY`, `OBSERVED_CELL_PROTECTED`. No implicit default for hook mapping or mirror. From this commit, `types.ts`, `result.ts`, `brand.ts`, `limits.ts`, `profile/*`, `index.ts` and every exported signature change only through a spec update. Open non-blocking items: SG-R3-1 (`createDeck` `INVALID_EDIT_HISTORY` lacks a requirement clause), N-R3-1 to N-R3-5 (wording and test details).
+### 2026-11-27  Correction: history rewritten to remove private planning documents
+- Surface: Kiro IDE
+- Steering: unchanged
+- Feature Spec: none
+- Hooks fired: "Protect .kiro from .gitignore" (fileEdited) fired after a temporary script outside the repository was saved, not only after `.gitignore` saves, so its file pattern matches more than intended. Its `git check-ignore` check found nothing under `.kiro` ignored
+- MCP tools used: none
+- Bugfix Spec: none
+- Tests: none for this change
+- Screenshots: none
+- Commits: this entry's commit
+- Decisions: at the user's request, `docs/PLAN.md`, `docs/RISKS.md` and `docs/DEMO_SCRIPT.md` are private. They now live in an ignored local `private/` folder and were removed from every commit with `git filter-repo`. The Kiro trail and review documents stay public. The rewrite gave every commit a new hash; the original history is kept in a local backup bundle. Commit hashes cited in earlier entries and in `docs/reviews/` refer to the old history. Their new values:
+
+| Old hash | New hash |
+|---|---|
+| c4abaac | d7d1988 |
+| 7a94742 | 7a94742 |
+| 2e425ed | 013a549 |
+| 0a7b5c8 | 100407f |
+| eda2b02 | ffd1d0a |
+| b44b606 | ed36a7e |
+| 96d590a | 9c5570f |
+| c3336f6 | 10593ba |
+| c40cf39 | 7d97b49 |
+| 7691139 | removed (it only added the planning files) |
+| 9e0b5dc | fbf1881 |
+| d3b19d3 | 69fa2ba |
+| 98dfe28 | fe09ba3 |
+| af0ff63 | 0b7e8ce |
+| 26a46c7 | eddc8b4 |
+| af339af | f49b66e |
+| ca45a4f | e404e08 |
+| b4f8388 | 5ad909a |
+| e9d80eb | c634ed8 |
+| 3c2162b | e0193a8 |
+
+Earlier entries that mention `docs/PLAN.md` describe the plan as it was; that file is no longer in the repository.
