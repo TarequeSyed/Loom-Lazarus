@@ -4,9 +4,19 @@ import { hookWarpIndices, warpCount } from "../profile/hookMapping";
 import type { HookMappingConfig } from "../profile/hookMapping";
 import type { MachineProfile } from "../profile/machineProfile";
 
-// Only readableCount is read by the hook mapping functions.
-const GARIN_LIKE = { readableCount: 400 } as unknown as MachineProfile;
-const SMALL = { readableCount: 5 } as unknown as MachineProfile;
+// Only readableCount, hookMappings and mirrorOptions are read by the hook mapping functions.
+const UNV = { status: "unverified", basis: "unknown" } as const;
+const BOTH = [
+  { kind: "contiguous-visualization", verification: UNV },
+  { kind: "repeat", verification: UNV },
+] as const;
+const GARIN_LIKE = { readableCount: 400, hookMappings: BOTH, mirrorOptions: ["none", "mirrored"] } as unknown as MachineProfile;
+const SMALL = { readableCount: 5, hookMappings: BOTH, mirrorOptions: ["none", "mirrored"] } as unknown as MachineProfile;
+const REPEAT_ONLY = {
+  readableCount: 5,
+  hookMappings: [BOTH[1]],
+  mirrorOptions: ["none"],
+} as unknown as MachineProfile;
 const ri = (n: number): ReadIndex => n as ReadIndex;
 
 function cfg(
@@ -66,8 +76,33 @@ describe("hook mapping", () => {
     expect(code(hookWarpIndices(SMALL, cfg("repeat", "none", 2), ri(5)))).toBe("READ_INDEX_OUT_OF_RANGE");
     expect(code(hookWarpIndices(SMALL, cfg("repeat", "none", 2), ri(-1)))).toBe("READ_INDEX_OUT_OF_RANGE");
     expect(code(warpCount(SMALL, cfg(undefined, "none")))).toBe("HOOK_MAPPING_NOT_CONFIGURED");
-    expect(code(warpCount(SMALL, cfg("bogus" as never, "none")))).toBe("HOOK_MAPPING_INVALID");
+    expect(code(warpCount(SMALL, cfg("bogus" as never, "none")))).toBe("UNSUPPORTED_HOOK_MAPPING");
     expect(code(warpCount(SMALL, cfg("repeat", undefined)))).toBe("MIRROR_NOT_CONFIGURED");
     expect(code(warpCount(SMALL, cfg("repeat", "sideways" as never)))).toBe("UNSUPPORTED_MIRROR");
+  });
+
+  it("rejects a mapping or mirror the profile does not permit", () => {
+    const code = (r: { ok: boolean; error?: { code: string } }) => (r.ok ? "ok" : r.error?.code);
+    expect(code(warpCount(REPEAT_ONLY, cfg("repeat", "none")))).toBe("ok");
+    expect(code(warpCount(REPEAT_ONLY, cfg("contiguous-visualization", "none")))).toBe("UNSUPPORTED_HOOK_MAPPING");
+    expect(code(warpCount(REPEAT_ONLY, cfg("repeat", "mirrored")))).toBe("UNSUPPORTED_MIRROR");
+    expect(code(hookWarpIndices(REPEAT_ONLY, cfg("contiguous-visualization", "none"), ri(0)))).toBe(
+      "UNSUPPORTED_HOOK_MAPPING",
+    );
+  });
+
+  it("has no implicit default in either function", () => {
+    const code = (r: { ok: boolean; error?: { code: string } }) => (r.ok ? "ok" : r.error?.code);
+    expect(code(hookWarpIndices(SMALL, cfg(undefined, undefined), ri(0)))).toBe("HOOK_MAPPING_NOT_CONFIGURED");
+    expect(code(hookWarpIndices(SMALL, cfg("repeat", undefined), ri(0)))).toBe("MIRROR_NOT_CONFIGURED");
+  });
+
+  it("follows the documented check order", () => {
+    const code = (r: { ok: boolean; error?: { code: string } }) => (r.ok ? "ok" : r.error?.code);
+    // threads-per-hook before mapping, mapping before mirror, mirror before hook index.
+    expect(code(warpCount(SMALL, cfg(undefined, undefined, 0)))).toBe("INVALID_THREADS_PER_HOOK");
+    expect(code(warpCount(SMALL, cfg("bogus" as never, undefined)))).toBe("UNSUPPORTED_HOOK_MAPPING");
+    expect(code(hookWarpIndices(SMALL, cfg("repeat", "sideways" as never), ri(99)))).toBe("UNSUPPORTED_MIRROR");
+    expect(code(hookWarpIndices(SMALL, cfg("repeat", undefined), ri(99)))).toBe("MIRROR_NOT_CONFIGURED");
   });
 });

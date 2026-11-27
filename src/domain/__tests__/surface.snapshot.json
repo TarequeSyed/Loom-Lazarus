@@ -3,683 +3,843 @@
   "exports": [
     {
       "name": "ActionId",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type ActionId = string;"
     },
     {
       "name": "AmbiguousAsDownPolicy",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface AmbiguousAsDownPolicy { readonly ambiguousAs: \"down\"; readonly note: string; }"
     },
     {
       "name": "ApprovalRecord",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface ApprovalRecord { readonly actionId: ActionId; readonly sequence: SequenceNumber; readonly state: ApprovalState; readonly cause: \"init\" | \"approve\" | \"revoke\" | \"edit\" | \"undo\" | \"structure\" | \"withdrawal\"; readonly policyNote?: string; }"
     },
     {
       "name": "ApprovalState",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type ApprovalState = \"unapproved\" | \"approved\";"
     },
     {
       "name": "Bit",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type Bit = 0 | 1;"
     },
     {
       "name": "Bitmap",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type Bitmap = readonly (readonly number[])[];"
     },
     {
       "name": "Card",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface Card { readonly schemaVersion: 1; readonly cardId: string; readonly cells: readonly Cell[]; }"
     },
     {
       "name": "CardToPassSpec",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type CardToPassSpec = { readonly kind: \"one-card-per-pass\"; };"
     },
     {
       "name": "Cell",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface Cell { readonly raw: RawObservation; readonly initial: CellInitial; readonly history: readonly EditEntry[]; }"
     },
     {
       "name": "CellComparison",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface CellComparison { readonly total: number; readonly matching: number; readonly mismatchTotal: number; readonly mismatches: readonly { cardId: string; readIndex: ReadIndex; truth?: Bit; candidate?: Bit; }[]; }"
     },
     {
       "name": "CellInitial",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface CellInitial { readonly effectiveValue?: Bit; readonly provenance: Exclude<Provenance, \"user-edited\">; readonly restorationConfidence: number | null; readonly evidence: Evidence; }"
     },
     {
       "name": "CellSeed",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface CellSeed { readonly raw: RawObservation; readonly initial?: Omit<CellInitial, \"restorationConfidence\">; }"
     },
     {
       "name": "CompiledGridPosition",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface CompiledGridPosition { readonly gridRow: number; readonly gridColumn: number; }"
     },
     {
       "name": "CompiledProfile",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface CompiledProfile { readonly gridRows: number; readonly gridColumns: number; readonly readableCount: number; readonly reserved: ReadonlySet<number>; readonly gridToRead: readonly number[]; readonly readToGrid: readonly CompiledGridPosition[]; }"
     },
     {
       "name": "DIGEST_ALGORITHM",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "\"fnv1a-64-v1\""
     },
     {
       "name": "DamageFn",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type DamageFn = (rng: RandomFn, ctx: { cardId: string; readIndex: ReadIndex; raw: RawObservation; }) => RawObservation;"
     },
     {
       "name": "Deck",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface Deck { readonly schemaVersion: 1; readonly profile: MachineProfile; readonly cards: readonly Card[]; readonly approvals: readonly ApprovalRecord[]; readonly lastEntrySequence: number; readonly confidenceCalibration: \"uncalibrated\" | { readonly benchmarkRef: string; }; }"
     },
     {
       "name": "DomainError",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface DomainError { readonly code: ErrorCode; readonly message: string; readonly path?: string; }"
     },
     {
       "name": "DuplicateCardPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface DuplicateCardPayload { readonly cardId: string; readonly newCardId: string; }"
     },
     {
       "name": "ERROR_CODES",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "readonly [\"UNSUPPORTED_SCHEMA_VERSION\", \"INVALID_FORMAT\", \"INVALID_PROFILE\", \"PROFILE_COUNT_MISMATCH\", \"POSITION_OUT_OF_RANGE\", \"RESERVED_POSITION\", \"READ_INDEX_OUT_OF_RANGE\", \"PHYSICAL_DIMENSIONS_UNAVAILABLE\", \"OBSERVED_WITHOUT_OBSERVATION\", \"PROBABILITY_OUT_OF_RANGE\", \"INVALID_PROVENANCE\", \"INFERENCE_CANNOT_BE_OBSERVED\", \"EDIT_NOTE_REQUIRED\", \"EVIDENCE_REQUIRED\", \"EVIDENCE_TOO_LONG\", \"DUPLICATE_ACTION_ID\", \"NOTHING_TO_UNDO\", \"INVALID_EDIT\", \"INVALID_EDIT_HISTORY\", \"UNKNOWN_CARD\", \"UNRESOLVED_CELLS\", \"UNRESOLVED_CELL\", \"MISSING_REQUIRED_FIELD\", \"INVALID_DECK\", \"DECK_SIZE_OUT_OF_RANGE\", \"DUPLICATE_CARD_ID\", \"CELL_COUNT_MISMATCH\", \"INVALID_REORDER\", \"INPUT_TOO_LARGE\", \"INVALID_JSON\", \"UNKNOWN_FIELD\", \"INVALID_THREADS_PER_HOOK\", \"MIRROR_NOT_CONFIGURED\", \"UNSUPPORTED_MIRROR\", \"HOOK_MAPPING_NOT_CONFIGURED\", \"UNSUPPORTED_HOOK_MAPPING\", \"HOOK_MAPPING_INVALID\", \"DECK_NOT_APPROVED\", \"FABRIC_TOO_LARGE\", \"COLOUR_LAYER_OUT_OF_RANGE\", \"INVALID_COLOUR_LAYER\", \"ALREADY_COMPLETE\", \"PAUSED\", \"SEEK_OUT_OF_RANGE\", \"BITMAP_WIDTH_UNSUPPORTED\", \"BITMAP_HEIGHT_UNSUPPORTED\", \"BITMAP_NOT_BINARY\", \"INVALID_EXPORT_OPTIONS\", \"SESSION_DIGEST_MISMATCH\", \"SESSION_TRUNCATED\", \"SESSION_SEQUENCE_INVALID\", \"SESSION_TOO_LARGE\", \"SESSION_ACTION_INVALID\", \"SESSION_ACTION_FAILED\", \"NOTHING_TO_WITHDRAW\", \"DECK_SHAPE_MISMATCH\", \"CARD_INDEX_OUT_OF_RANGE\", \"INVALID_APPROVAL_HISTORY\"]"
     },
     {
       "name": "ERROR_MESSAGES",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "Readonly<Record<\"UNSUPPORTED_SCHEMA_VERSION\" | \"INVALID_FORMAT\" | \"INVALID_PROFILE\" | \"PROFILE_COUNT_MISMATCH\" | \"POSITION_OUT_OF_RANGE\" | \"RESERVED_POSITION\" | \"READ_INDEX_OUT_OF_RANGE\" | \"PHYSICAL_DIMENSIONS_UNAVAILABLE\" | \"OBSERVED_WITHOUT_OBSERVATION\" | \"PROBABILITY_OUT_OF_RANGE\" | \"INVALID_PROVENANCE\" | \"INFERENCE_CANNOT_BE_OBSERVED\" | \"EDIT_NOTE_REQUIRED\" | \"EVIDENCE_REQUIRED\" | \"EVIDENCE_TOO_LONG\" | \"DUPLICATE_ACTION_ID\" | \"NOTHING_TO_UNDO\" | \"INVALID_EDIT\" | \"INVALID_EDIT_HISTORY\" | \"UNKNOWN_CARD\" | \"UNRESOLVED_CELLS\" | \"UNRESOLVED_CELL\" | \"MISSING_REQUIRED_FIELD\" | \"INVALID_DECK\" | \"DECK_SIZE_OUT_OF_RANGE\" | \"DUPLICATE_CARD_ID\" | \"CELL_COUNT_MISMATCH\" | \"INVALID_REORDER\" | \"INPUT_TOO_LARGE\" | \"INVALID_JSON\" | \"UNKNOWN_FIELD\" | \"INVALID_THREADS_PER_HOOK\" | \"MIRROR_NOT_CONFIGURED\" | \"UNSUPPORTED_MIRROR\" | \"HOOK_MAPPING_NOT_CONFIGURED\" | \"UNSUPPORTED_HOOK_MAPPING\" | \"HOOK_MAPPING_INVALID\" | \"DECK_NOT_APPROVED\" | \"FABRIC_TOO_LARGE\" | \"COLOUR_LAYER_OUT_OF_RANGE\" | \"INVALID_COLOUR_LAYER\" | \"ALREADY_COMPLETE\" | \"PAUSED\" | \"SEEK_OUT_OF_RANGE\" | \"BITMAP_WIDTH_UNSUPPORTED\" | \"BITMAP_HEIGHT_UNSUPPORTED\" | \"BITMAP_NOT_BINARY\" | \"INVALID_EXPORT_OPTIONS\" | \"SESSION_DIGEST_MISMATCH\" | \"SESSION_TRUNCATED\" | \"SESSION_SEQUENCE_INVALID\" | \"SESSION_TOO_LARGE\" | \"SESSION_ACTION_INVALID\" | \"SESSION_ACTION_FAILED\" | \"NOTHING_TO_WITHDRAW\" | \"DECK_SHAPE_MISMATCH\" | \"CARD_INDEX_OUT_OF_RANGE\" | \"INVALID_APPROVAL_HISTORY\", string>>"
     },
     {
       "name": "EditEntry",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type EditEntry = UserEditEntry | InferenceEntry | UndoEntry | WithdrawalEntry;"
     },
     {
       "name": "EffectiveView",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface EffectiveView { readonly effectiveValue?: Bit; readonly provenance: Provenance; readonly restorationConfidence: number | null; readonly evidence: Evidence; readonly holeLikelihood?: number; }"
     },
     {
       "name": "EndHoleSpec",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface EndHoleSpec { readonly id: string; readonly description: string; readonly xMm?: number; readonly yMm?: number; readonly diameterMm?: number; }"
     },
     {
       "name": "ErrorCode",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type ErrorCode = (typeof ERROR_CODES)[number];"
     },
     {
       "name": "Evidence",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface Evidence { readonly text: string; readonly refs: readonly EvidenceRef[]; }"
     },
     {
       "name": "EvidenceRef",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface EvidenceRef { readonly kind: \"card\" | \"cell\" | \"period\" | \"symmetry-axis\" | \"note\"; readonly cardId?: string; readonly readIndex?: number; readonly period?: number; }"
     },
     {
       "name": "FabricBuffer",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface FabricBuffer { readonly warpCount: number; readonly passCount: number; readonly rows: readonly FabricRow[]; readonly colours?: ResolvedColours; readonly disclaimer: SimulationDisclaimerText; }"
     },
     {
       "name": "FabricCell",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type FabricCell = \"warp\" | \"weft\";"
     },
     {
       "name": "FabricCoordinate",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface FabricCoordinate { readonly warpIndex: WarpIndex; readonly passIndex: PassIndex; }"
     },
     {
       "name": "FabricRow",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface FabricRow { readonly passIndex: PassIndex; readonly liftedHooks: readonly ReadIndex[]; readonly liftedWarpIndices: readonly WarpIndex[]; }"
     },
     {
       "name": "GARIN_PROFILE",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "MachineProfile"
     },
     {
       "name": "GridColumn",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type GridColumn = Brand<number, \"GridColumn\">;"
     },
     {
       "name": "GridPosition",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface GridPosition { readonly gridRow: GridRow; readonly gridColumn: GridColumn; }"
     },
     {
       "name": "GridRow",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type GridRow = Brand<number, \"GridRow\">;"
     },
     {
       "name": "HookMappingConfig",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface HookMappingConfig { readonly threadsPerHook: number; readonly hookMapping?: HookMappingKind; readonly mirror?: MirrorOrientation; }"
     },
     {
       "name": "HookMappingKind",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type HookMappingKind = \"contiguous-visualization\" | \"repeat\";"
     },
     {
       "name": "HookMappingSpec",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface HookMappingSpec { readonly kind: HookMappingKind; readonly verification: VerificationStatus; readonly note?: string; }"
     },
     {
       "name": "INTERFACE_VERSION",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "\"1.1.0\""
     },
     {
       "name": "ImportedDeck",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface ImportedDeck { readonly deck: Deck; readonly weftColourLayer?: WeftColourLayer; readonly meta: { readonly sourceSchemaVersion: number; readonly migrations: readonly string[]; }; }"
     },
     {
       "name": "InferenceEntry",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface InferenceEntry { readonly kind: \"inference\"; readonly actionId: ActionId; readonly sequence: SequenceNumber; readonly previous: PreviousFields; readonly value?: Bit; readonly provenance: \"repeat-inferred\" | \"symmetry-inferred\" | \"ambiguous\"; readonly confidence: number | null; readonly evidence: Evidence; readonly policyNote?: string; }"
     },
     {
       "name": "InferenceInput",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface InferenceInput { cardId: string; readIndex: number; actionId: ActionId; provenance: string; value?: Bit; confidence: number; evidence: Evidence; }"
     },
     {
       "name": "InsertCardPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface InsertCardPayload { readonly card: Card; readonly at: number; }"
     },
     {
       "name": "LIMITS",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "{ readonly maxCardsPerDeck: 10000; readonly maxJsonBytes: number; readonly maxSessionLogBytes: number; readonly maxSessionActions: 100000; readonly maxBitmapRows: 10000; readonly maxBitmapColumns: 2048; readonly maxThreadsPerHook: 64; readonly maxEvidenceChars: 1000; readonly maxEditNoteChars: 1000; readonly maxViolations: 100; readonly maxFabricCells: 4000000; readonly maxGridRows: 256; readonly maxGridColumns: 256; }"
     },
     {
       "name": "LoomConfigInput",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface LoomConfigInput { threadsPerHook?: number; hookMapping?: HookMappingKind; mirror?: MirrorOrientation; colourLayer?: WeftColourLayer; }"
     },
     {
       "name": "LoomConfiguration",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface LoomConfiguration { readonly schemaVersion: 1; readonly profileId: string; readonly threadsPerHook: number; readonly hookMapping: HookMappingKind; readonly mirror: MirrorOrientation; readonly colourLayer?: WeftColourLayer; }"
     },
     {
       "name": "MachineProfile",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface MachineProfile { readonly schemaVersion: 1; readonly profileId: string; readonly displayName: string; readonly gridRows: number; readonly gridColumns: number; readonly readableCount: number; readonly reservedPositions: readonly ReservedPositionSpec[]; readonly endHoles?: readonly EndHoleSpec[]; readonly readOrder: ReadOrderSpec; readonly hookMappings: readonly HookMappingSpec[]; readonly defaultThreadsPerHook: number; readonly mirrorOptions: readonly MirrorOrientation[]; readonly cardToPass: CardToPassSpec; readonly physicalDimensions?: PhysicalDimensions; readonly verification: Readonly<Record<ProfileFieldKey, VerificationStatus>>; }"
     },
     {
       "name": "MigrationOutcome",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface MigrationOutcome { readonly json: unknown; readonly sourceSchemaVersion: number; readonly applied: readonly string[]; }"
     },
     {
       "name": "Millimetres",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type Millimetres = Brand<number, \"Millimetres\">;"
     },
     {
       "name": "MirrorOrientation",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type MirrorOrientation = \"none\" | \"mirrored\";"
     },
     {
       "name": "PassIndex",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type PassIndex = Brand<number, \"PassIndex\">;"
     },
     {
       "name": "PhysicalDimensions",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface PhysicalDimensions { readonly cardWidthMm: number; readonly cardHeightMm: number; readonly originXMm: number; readonly originYMm: number; readonly rowPitchMm: number; readonly columnPitchMm: number; readonly holeDiameterMm: number; }"
     },
     {
       "name": "PhysicalLocation",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface PhysicalLocation { readonly xMm: Millimetres; readonly yMm: Millimetres; }"
     },
     {
       "name": "PreviousFields",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface PreviousFields { readonly value?: Bit; readonly provenance: Provenance; readonly confidence: number | null; readonly evidence: Evidence; }"
     },
     {
       "name": "ProfileFieldKey",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type ProfileFieldKey = \"gridSize\" | \"reservedPositions\" | \"endHoles\" | \"readOrder\" | \"defaultThreadsPerHook\" | \"mirrorOptions\" | \"cardToPass\" | \"physicalDimensions\";"
     },
     {
       "name": "Provenance",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type Provenance = \"observed\" | \"repeat-inferred\" | \"symmetry-inferred\" | \"ambiguous\" | \"user-edited\";"
     },
     {
       "name": "RandomFn",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type RandomFn = () => number;"
     },
     {
       "name": "RawObservation",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface RawObservation { readonly value?: Bit; readonly holeLikelihood?: number; }"
     },
     {
       "name": "ReadIndex",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type ReadIndex = Brand<number, \"ReadIndex\">;"
     },
     {
       "name": "ReadOrderSpec",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type ReadOrderSpec = { readonly kind: \"column-major\"; readonly columnDirection: \"right-to-left\" | \"left-to-right\"; readonly rowDirection: \"bottom-up\" | \"top-down\"; } | { readonly kind: \"explicit\"; readonly order: readonly { readonly gridRow: number; readonly gridColumn: number; }[]; };"
     },
     {
       "name": "RecordingSession",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface RecordingSession { readonly log: SessionLog; readonly state: SessionState; }"
     },
     {
       "name": "RemoveCardPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface RemoveCardPayload { readonly cardId: string; }"
     },
     {
       "name": "ReorderCardsPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface ReorderCardsPayload { readonly order: readonly string[]; }"
     },
     {
       "name": "ReportedError",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface ReportedError extends DomainError { readonly report: ViolationReport; }"
     },
     {
       "name": "RequestApprovalPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface RequestApprovalPayload { readonly policy?: { readonly ambiguousAs: \"down\"; readonly note: string; }; }"
     },
     {
       "name": "ReservedPositionSpec",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface ReservedPositionSpec { readonly gridRow: number; readonly gridColumn: number; readonly role: string; }"
     },
     {
       "name": "ResolvedColours",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface ResolvedColours { readonly label: \"user-supplied colour layer\"; readonly warpColourByIndex: readonly string[]; readonly weftColourByPass: readonly string[]; }"
     },
     {
       "name": "Result",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type Result<T, E extends DomainError = DomainError> = { readonly ok: true; readonly value: T; } | { readonly ok: false; readonly error: E; };"
     },
     {
       "name": "RevokeApprovalPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type RevokeApprovalPayload = Record<string, never>;"
     },
     {
       "name": "RunStatus",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type RunStatus = \"ready\" | \"running\" | \"paused\" | \"complete\";"
     },
     {
       "name": "SIMULATION_DISCLAIMER",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "\"Educational Jacquard-inspired simulation. Not compatible with, and does not drive, physical looms.\""
     },
     {
       "name": "SUPPORTED_SCHEMA_VERSIONS",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "readonly number[]"
     },
     {
       "name": "SVG_CAVEAT",
-      "kind": "value"
-    },
-    {
-      "name": "SchemaNode",
-      "kind": "type"
+      "kind": "value",
+      "declaration": "\"Not validated for physical laser cutting or any physical loom. Dimensions are unverified unless marked verified in the Machine_Profile.\""
     },
     {
       "name": "SequenceNumber",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type SequenceNumber = number;"
     },
     {
       "name": "SessionAction",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface SessionAction { readonly sequence: SequenceNumber; readonly actionId: ActionId; readonly kind: SessionActionKind; readonly payload: SessionPayload; readonly stateDigest: string; }"
     },
     {
       "name": "SessionActionInput",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface SessionActionInput { readonly actionId: ActionId; readonly kind: SessionActionKind; readonly payload: SessionPayload; }"
     },
     {
       "name": "SessionActionKind",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type SessionActionKind = \"user-edit\" | \"undo-edit\" | \"set-inferred\" | \"withdraw-inference\" | \"request-approval\" | \"revoke-approval\" | \"reorder-cards\" | \"insert-card\" | \"remove-card\" | \"duplicate-card\" | \"sim-create\" | \"sim-step\" | \"sim-pause\" | \"sim-resume\" | \"sim-seek\" | \"sim-reset\";"
     },
     {
       "name": "SessionLog",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface SessionLog { readonly format: \"loom-lazarus-session\"; readonly schemaVersion: 1; readonly digestAlgorithm: typeof DIGEST_ALGORITHM; readonly initialDeck: Deck; readonly initialLoomConfiguration?: LoomConfiguration; readonly actionCount: number; readonly actions: readonly SessionAction[]; }"
     },
     {
       "name": "SessionLogContext",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface SessionLogContext { readonly initialLoomConfiguration?: LoomConfiguration; }"
     },
     {
       "name": "SessionPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type SessionPayload = UserEditPayload | UndoEditPayload | SetInferredPayload | WithdrawInferencePayload | RequestApprovalPayload | RevokeApprovalPayload | ReorderCardsPayload | InsertCardPayload | RemoveCardPayload | DuplicateCardPayload | SimCreatePayload | SimEmptyPayload | SimSeekPayload;"
     },
     {
       "name": "SessionState",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface SessionState { readonly deck: Deck; readonly simulation?: SimulationState; }"
     },
     {
       "name": "SetInferredPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface SetInferredPayload { readonly cardId: string; readonly readIndex: number; readonly provenance: string; readonly value?: Bit; readonly confidence: number; readonly evidence: Evidence; }"
     },
     {
       "name": "SimCreatePayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface SimCreatePayload { readonly loomConfiguration?: LoomConfiguration; }"
     },
     {
       "name": "SimEmptyPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type SimEmptyPayload = Record<string, never>;"
     },
     {
       "name": "SimSeekPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface SimSeekPayload { readonly passIndex: number; }"
     },
     {
       "name": "SimulationDisclaimerText",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type SimulationDisclaimerText = \"Educational Jacquard-inspired simulation. Not compatible with, and does not drive, physical looms.\";"
     },
     {
       "name": "SimulationState",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface SimulationState { readonly schemaVersion: 1; readonly deck: Deck; readonly config: LoomConfiguration; readonly passIndex: PassIndex; readonly status: RunStatus; readonly fabric: FabricBuffer; readonly disclaimer: SimulationDisclaimerText; }"
     },
     {
       "name": "SvgExportOptions",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface SvgExportOptions { readonly scale: number; readonly unit: \"px\" | \"mm\"; readonly profile: MachineProfile; }"
     },
     {
       "name": "UndoEditPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface UndoEditPayload { readonly cardId: string; readonly readIndex: number; }"
     },
     {
       "name": "UndoEntry",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface UndoEntry { readonly kind: \"undo\"; readonly actionId: ActionId; readonly sequence: SequenceNumber; readonly reverses: ActionId; readonly restoredValue?: Bit; readonly restoredProvenance: Provenance; }"
     },
     {
       "name": "UserEditEntry",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface UserEditEntry { readonly kind: \"user-edit\"; readonly actionId: ActionId; readonly sequence: SequenceNumber; readonly previousValue?: Bit; readonly previousProvenance: Provenance; readonly newValue: Bit; readonly editNote: string; readonly approvalBefore: ApprovalState; }"
     },
     {
       "name": "UserEditInput",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface UserEditInput { cardId: string; readIndex: number; value: Bit; editNote: string; actionId: ActionId; }"
     },
     {
       "name": "UserEditPayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface UserEditPayload { readonly cardId: string; readonly readIndex: number; readonly value: Bit; readonly editNote: string; }"
     },
     {
       "name": "VerificationStatus",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface VerificationStatus { readonly status: \"unverified\" | \"verified\"; readonly basis: \"paper-figure\" | \"geometric-inference\" | \"unknown\"; readonly source?: string; readonly note?: string; }"
     },
     {
       "name": "ViolationReport",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface ViolationReport { readonly violations: readonly DomainError[]; readonly totalViolations: number; }"
     },
     {
       "name": "WarpIndex",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export type WarpIndex = Brand<number, \"WarpIndex\">;"
     },
     {
       "name": "WeftColourLayer",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface WeftColourLayer { readonly schemaVersion: 1; readonly label: \"user-supplied colour layer (not stored on punched cards)\"; readonly passColours: readonly { readonly passIndex: PassIndex; readonly colour: string; }[]; readonly warpColours: readonly { readonly warpIndex: WarpIndex; readonly colour: string; }[]; readonly defaultWeftColour?: string; readonly defaultWarpColour?: string; }"
     },
     {
       "name": "WithdrawInferencePayload",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface WithdrawInferencePayload { readonly cardId: string; readonly readIndex: number; }"
     },
     {
       "name": "WithdrawalEntry",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface WithdrawalEntry { readonly kind: \"withdrawal\"; readonly actionId: ActionId; readonly sequence: SequenceNumber; readonly reverses: ActionId; readonly restored: PreviousFields; }"
     },
     {
       "name": "WithdrawalInput",
-      "kind": "type"
+      "kind": "type",
+      "declaration": "export interface WithdrawalInput { cardId: string; readIndex: number; actionId: ActionId; }"
     },
     {
       "name": "appendAction",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(s: RecordingSession, input: SessionActionInput) => Result<RecordingSession>"
     },
     {
       "name": "applySessionAction",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(state: SessionState, input: SessionActionInput, log: SessionLogContext) => Result<SessionState>"
     },
     {
       "name": "approvalHistory",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck) => readonly ApprovalRecord[]"
     },
     {
       "name": "asActionId",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(value: string) => Result<string>"
     },
     {
       "name": "asGridColumn",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(value: number, columnCount?: number | undefined) => Result<GridColumn>"
     },
     {
       "name": "asGridRow",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(value: number, rowCount?: number | undefined) => Result<GridRow>"
     },
     {
       "name": "asMillimetres",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(value: number) => Result<Millimetres>"
     },
     {
       "name": "asPassIndex",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(value: number, passCount?: number | undefined) => Result<PassIndex>"
     },
     {
       "name": "asReadIndex",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(value: number, readableCount?: number | undefined) => Result<ReadIndex>"
     },
     {
       "name": "asSequenceNumber",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(value: number) => Result<number>"
     },
     {
       "name": "asWarpIndex",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(value: number, warpCount?: number | undefined) => Result<WarpIndex>"
     },
     {
       "name": "bitmapToDeck",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(bitmap: Bitmap, profile: MachineProfile, options: { cardIdPrefix: string; actionId: string; }) => Result<Deck>"
     },
     {
       "name": "compareCells",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(truth: Deck, candidate: Deck) => Result<CellComparison, ReportedError>"
     },
     {
       "name": "compileProfile",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(profile: MachineProfile) => Result<CompiledProfile, ReportedError>"
     },
     {
       "name": "create",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, cfg: LoomConfiguration) => Result<SimulationState>"
     },
     {
       "name": "createCard",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(profile: MachineProfile, cardId: string, observations: readonly CellSeed[]) => Result<Card>"
     },
     {
       "name": "createDeck",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(profile: MachineProfile, cards: readonly Card[], actionId: string) => Result<Deck>"
     },
     {
       "name": "createSession",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, config?: LoomConfiguration | undefined) => Result<RecordingSession, ReportedError>"
     },
     {
       "name": "currentApproval",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck) => ApprovalState"
     },
     {
       "name": "deckEquals",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(a: Deck, b: Deck) => boolean"
     },
     {
       "name": "decodeCard",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, cardIndex: number) => Result<readonly Bit[]>"
     },
     {
       "name": "deriveDamagedDeck",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(truth: Deck, damage: DamageFn, rng: RandomFn, actionId: string) => Result<Deck, ReportedError>"
     },
     {
       "name": "duplicateCard",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, cardId: string, newCardId: string, actionId: string) => Result<Deck>"
     },
     {
       "name": "effectiveView",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(cell: Cell) => EffectiveView"
     },
     {
       "name": "err",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "<E extends DomainError>(error: E) => Result<never, E>"
     },
     {
       "name": "exportCardSvg",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(card: Card, deck: Deck, o: SvgExportOptions) => Result<string>"
     },
     {
       "name": "exportDeckJson",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, extras?: { weftColourLayer?: WeftColourLayer | undefined; } | undefined) => Result<string, ReportedError>"
     },
     {
       "name": "exportDeckSvg",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, o: SvgExportOptions) => Result<string>"
     },
     {
       "name": "exportSessionLog",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(log: SessionLog) => Result<string>"
     },
     {
       "name": "fabricCellAt",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(buf: FabricBuffer, c: FabricCoordinate) => FabricCell"
     },
     {
       "name": "fabricCoordinate",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(readIndex: ReadIndex, threadOffset: number, passIndex: PassIndex, cfg: LoomConfiguration, profile: MachineProfile) => Result<FabricCoordinate>"
     },
     {
       "name": "fabricToCells",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(buf: FabricBuffer) => readonly (readonly FabricCell[])[]"
     },
     {
       "name": "getCell",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, cardId: string, readIndex: number) => Result<Cell>"
     },
     {
       "name": "getCellByCardAndIndex",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, cardId: string, readIndex: number) => Result<Cell>"
     },
     {
       "name": "gridToPhysical",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(p: MachineProfile, pos: GridPosition) => Result<PhysicalLocation>"
     },
     {
       "name": "gridToReadIndex",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(p: MachineProfile, pos: GridPosition) => Result<ReadIndex>"
     },
     {
       "name": "hookWarpIndices",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(profile: MachineProfile, cfg: HookMappingConfig, hook: ReadIndex) => Result<readonly WarpIndex[]>"
     },
     {
       "name": "importDeckJson",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(text: string) => Result<ImportedDeck, ReportedError>"
     },
     {
       "name": "importSessionLog",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(text: string) => Result<SessionLog, ReportedError>"
     },
     {
       "name": "insertCard",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, card: Card, at: number, actionId: string) => Result<Deck>"
     },
     {
       "name": "latestLiveEntry",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(cell: Cell) => UserEditEntry | InferenceEntry | undefined"
     },
     {
       "name": "makeError",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(code: \"UNSUPPORTED_SCHEMA_VERSION\" | \"INVALID_FORMAT\" | \"INVALID_PROFILE\" | \"PROFILE_COUNT_MISMATCH\" | \"POSITION_OUT_OF_RANGE\" | \"RESERVED_POSITION\" | \"READ_INDEX_OUT_OF_RANGE\" | \"PHYSICAL_DIMENSIONS_UNAVAILABLE\" | \"OBSERVED_WITHOUT_OBSERVATION\" | \"PROBABILITY_OUT_OF_RANGE\" | \"INVALID_PROVENANCE\" | \"INFERENCE_CANNOT_BE_OBSERVED\" | \"EDIT_NOTE_REQUIRED\" | \"EVIDENCE_REQUIRED\" | \"EVIDENCE_TOO_LONG\" | \"DUPLICATE_ACTION_ID\" | \"NOTHING_TO_UNDO\" | \"INVALID_EDIT\" | \"INVALID_EDIT_HISTORY\" | \"UNKNOWN_CARD\" | \"UNRESOLVED_CELLS\" | \"UNRESOLVED_CELL\" | \"MISSING_REQUIRED_FIELD\" | \"INVALID_DECK\" | \"DECK_SIZE_OUT_OF_RANGE\" | \"DUPLICATE_CARD_ID\" | \"CELL_COUNT_MISMATCH\" | \"INVALID_REORDER\" | \"INPUT_TOO_LARGE\" | \"INVALID_JSON\" | \"UNKNOWN_FIELD\" | \"INVALID_THREADS_PER_HOOK\" | \"MIRROR_NOT_CONFIGURED\" | \"UNSUPPORTED_MIRROR\" | \"HOOK_MAPPING_NOT_CONFIGURED\" | \"UNSUPPORTED_HOOK_MAPPING\" | \"HOOK_MAPPING_INVALID\" | \"DECK_NOT_APPROVED\" | \"FABRIC_TOO_LARGE\" | \"COLOUR_LAYER_OUT_OF_RANGE\" | \"INVALID_COLOUR_LAYER\" | \"ALREADY_COMPLETE\" | \"PAUSED\" | \"SEEK_OUT_OF_RANGE\" | \"BITMAP_WIDTH_UNSUPPORTED\" | \"BITMAP_HEIGHT_UNSUPPORTED\" | \"BITMAP_NOT_BINARY\" | \"INVALID_EXPORT_OPTIONS\" | \"SESSION_DIGEST_MISMATCH\" | \"SESSION_TRUNCATED\" | \"SESSION_SEQUENCE_INVALID\" | \"SESSION_TOO_LARGE\" | \"SESSION_ACTION_INVALID\" | \"SESSION_ACTION_FAILED\" | \"NOTHING_TO_WITHDRAW\" | \"DECK_SHAPE_MISMATCH\" | \"CARD_INDEX_OUT_OF_RANGE\" | \"INVALID_APPROVAL_HISTORY\", detail?: string | undefined, path?: string | undefined) => DomainError"
     },
     {
       "name": "makeLoomConfig",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(input: LoomConfigInput, profile: MachineProfile) => Result<LoomConfiguration>"
     },
     {
       "name": "migrateToCurrent",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(json: unknown, migrations?: Readonly<Record<number, (json: unknown) => unknown>> | undefined) => Result<MigrationOutcome>"
     },
     {
       "name": "ok",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "<T>(value: T) => Result<T, never>"
     },
     {
       "name": "passResult",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, cfg: LoomConfiguration, passIndex: PassIndex) => Result<FabricRow>"
     },
     {
       "name": "pause",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(s: SimulationState) => SimulationState"
     },
     {
       "name": "readIndexToGrid",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(p: MachineProfile, i: number) => Result<GridPosition>"
     },
     {
       "name": "removeCard",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, cardId: string, actionId: string) => Result<Deck>"
     },
     {
       "name": "reorderCards",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, order: readonly string[], actionId: string) => Result<Deck>"
     },
     {
       "name": "replaySession",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(log: SessionLog) => Result<readonly SessionState[], ReportedError>"
     },
     {
       "name": "replaySessionJson",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(text: string) => Result<readonly SessionState[], ReportedError>"
     },
     {
       "name": "requestApproval",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, i: { actionId: string; policy?: AmbiguousAsDownPolicy | undefined; }) => Result<Deck>"
     },
     {
       "name": "reset",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(s: SimulationState) => SimulationState"
     },
     {
       "name": "resume",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(s: SimulationState) => SimulationState"
     },
     {
       "name": "revokeApproval",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, i: { actionId: string; }) => Result<Deck>"
     },
     {
       "name": "runToEnd",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, cfg: LoomConfiguration) => Result<SimulationState>"
     },
     {
       "name": "seek",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(s: SimulationState, passIndex: number) => Result<SimulationState>"
     },
     {
       "name": "setInferred",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, i: InferenceInput) => Result<Deck>"
     },
     {
       "name": "stateDigest",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(state: SessionState) => string"
     },
     {
       "name": "step",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(s: SimulationState) => Result<SimulationState>"
     },
     {
       "name": "undoEdit",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, i: { cardId: string; readIndex: number; actionId: string; }) => Result<Deck>"
     },
     {
       "name": "userEdit",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, i: UserEditInput) => Result<Deck>"
     },
     {
       "name": "validateDeck",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(d: unknown) => Result<Deck, ReportedError>"
     },
     {
       "name": "validateLoomConfig",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(cfg: unknown, profile: MachineProfile) => Result<LoomConfiguration>"
     },
     {
       "name": "validateProfile",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(p: unknown) => Result<MachineProfile, ReportedError>"
     },
     {
       "name": "warpCount",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(profile: MachineProfile, cfg: HookMappingConfig) => Result<number>"
     },
     {
       "name": "withdrawInference",
-      "kind": "value"
-    },
-    {
-      "name": "writeCanonicalJson",
-      "kind": "value"
+      "kind": "value",
+      "declaration": "(deck: Deck, i: WithdrawalInput) => Result<Deck>"
     }
   ]
 }

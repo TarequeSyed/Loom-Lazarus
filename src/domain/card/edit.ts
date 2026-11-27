@@ -62,9 +62,15 @@ export interface InferenceInput {
  * Append an `inference` entry whose `previous` field holds the view before the call (including a `null`
  * confidence and the earlier evidence). `raw` is untouched.
  *
+ * Value rules (Req 5.34, 5.35): `repeat-inferred` or `symmetry-inferred` without a `value` is
+ * `INVALID_PROVENANCE`; `ambiguous` with a `value` is `INVALID_PROVENANCE` (an ambiguous entry that carries a value
+ * is written only by `requestApproval` with the ambiguous-as-down policy); `ambiguous` without a value is accepted.
+ * `InferenceInput` has no `policyNote`, so this function never produces a Deck that `validateDeck` rejects for this.
+ *
  * Errors, in check order: `UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE`, `DUPLICATE_ACTION_ID`,
- * `INFERENCE_CANNOT_BE_OBSERVED` (provenance `observed`), `INVALID_PROVENANCE` (not one of the five values, or
- * `user-edited`), `EVIDENCE_REQUIRED`, `EVIDENCE_TOO_LONG`, `PROBABILITY_OUT_OF_RANGE` (`null`, `undefined`,
+ * `INFERENCE_CANNOT_BE_OBSERVED` (provenance `observed`) / `INVALID_PROVENANCE` (not one of the five values,
+ * `user-edited`, or a value-rule violation above; these inputs are disjoint, so their order is immaterial),
+ * `EVIDENCE_REQUIRED`, `EVIDENCE_TOO_LONG`, `PROBABILITY_OUT_OF_RANGE` (`null`, `undefined`,
  * non-number, NaN, infinity or outside [0, 1]), `INVALID_EDIT` (an un-reversed user edit protects the cell).
  */
 export function setInferred(deck: Deck, i: InferenceInput): Result<Deck> {

@@ -149,8 +149,46 @@ Conventions for every task:
     - Any later change to the snapshot requires a spec update (Req 12.6).
     - _Requirements: 12.1, 12.6_
 
+  - [x] 4.5 Apply G1 fixes to implemented profile, brand and writer modules
+    - Source: `docs/reviews/2026-11-26-g1-domain-interface.md` and the "G1 review resolutions" amendment records in `requirements.md` and `design.md`. Pre-freeze corrections; `INTERFACE_VERSION` stays `"1.1.0"`.
+    - B-1 in `profile/hookMapping.ts`: `warpCount` and `hookWarpIndices` return `Result` per the design, with the design's check order. An unknown or not-permitted mapping returns `UNSUPPORTED_HOOK_MAPPING`, a not-permitted mirror returns `UNSUPPORTED_MIRROR`, and absent values return `HOOK_MAPPING_NOT_CONFIGURED` and `MIRROR_NOT_CONFIGURED`. Consult the profile's permitted mapping and mirror lists. TSDoc lists the codes in check order.
+    - S-7 in `profile/readOrder.ts`: `gridToPhysical` uses the origin and axes recorded in Req 4.10, and checks `PHYSICAL_DIMENSIONS_UNAVAILABLE` first.
+    - N-1 in `brand.ts`: non-integer inputs return the codes in the design table (read index and pass index use their range codes). TSDoc lists the codes.
+    - S-10 and N-2 in `profile/machineProfile.ts`: `validateProfile` and `compileProfile` return the specific violation code at top level with the report attached (Req 2.13), if not already; TSDoc lists the codes.
+    - N-7 in `profile/garinProfile.ts`: deep-freeze `GARIN_PROFILE`.
+    - S-5 in `io/canonicalJson.ts`: output ends with a single trailing `\n` (Req 7.17).
+    - N-4 in `src/domain/__tests__/seeds.ts`: add auxiliary seeds `20260190` to `20260199`, named per Req 13.26. Replace seed 4101 in `canonicalJson.test.ts` and the literal `20260100` in `generators/profile.test.ts` with named seed constants.
+    - Update the existing tests to match: `hookMapping.test.ts`, `readOrder.test.ts`, `result.test.ts`, `canonicalJson.test.ts`, `profile.test.ts`, `garinProfile.test.ts`.
+    - Files owned: `profile/hookMapping.ts`, `profile/readOrder.ts`, `brand.ts`, `profile/machineProfile.ts`, `profile/garinProfile.ts`, `io/canonicalJson.ts`, `src/domain/__tests__/seeds.ts`, `src/domain/__tests__/hookMapping.test.ts`, `readOrder.test.ts`, `result.test.ts`, `canonicalJson.test.ts`, `profile.test.ts`, `garinProfile.test.ts`, `generators/profile.test.ts`.
+    - Review findings: B-1, S-5 (trailing newline), S-7, S-10, N-1, N-2, N-4, N-7.
+    - _Requirements: 2.13, 4.10, 4.11, 7.17, 12.1, 13.26, 14.4, 14.13_
+
+  - [x] 4.6 Apply G1 fixes to stub signatures and documented semantics
+    - Source: as in task 4.5.
+    - B-2: functions documented with `INVALID_DECK` return `Result<T, ReportedError>` so the violation report is part of the type (`createSession`, `exportDeckJson`, `compareCells`, `deriveDamagedDeck`), per Req 12.9.
+    - S-1: `setInferred` value rules per Req 5.34 and 5.35 (an `ambiguous` value only through policy approval).
+    - S-2: `insertCard` and `duplicateCard` reject Cards with history (Req 6.13, 6.14); `CARD_INDEX_OUT_OF_RANGE` for a card index or `insertCard` position outside the Deck (Req 12.11).
+    - S-3: seeds carry no confidence and only `observed` or `ambiguous` provenance (Req 12.10).
+    - S-8: every stub's TSDoc code list and check order matches the design's S-8 table (`createCard`, `undoEdit`, `setInferred`, deck structure operations, `requestApproval`, `revokeApproval`, `compareCells`, `deriveDamagedDeck`, `decodeCard`, `passResult`, `fabricCoordinate`, `exportDeckJson`, `exportSessionLog`, `importSessionLog`, `exportCardSvg`, `appendAction`, `bitmapToDeck` including the empty-bitmap rule of Req 10.10 and the SVG profile rule of Req 11.11).
+    - S-9: `deck/validate.ts` TSDoc assigns the codes of Req 6.15, including `INVALID_APPROVAL_HISTORY` and `HOOK_MAPPING_INVALID`.
+    - N-3: `loom/config.ts` and `loom/interpreter.ts` TSDoc align the `validateLoomConfig`, `create` and `createSession` code lists, with the wrong-shape `INVALID_FORMAT` check first.
+    - `result.ts`: add `DECK_SHAPE_MISMATCH`, `CARD_INDEX_OUT_OF_RANGE` and `INVALID_APPROVAL_HISTORY` to `ERROR_CODES` with non-empty `ERROR_MESSAGES`.
+    - Files owned: `card/card.ts`, `card/edit.ts`, `deck/deck.ts`, `deck/validate.ts`, `deck/compare.ts`, `io/serialize.ts`, `loom/config.ts`, `loom/interpreter.ts`, `session/record.ts`, `bitmap/bitmapToDeck.ts`, `svg/exportSvg.ts`, `result.ts`.
+    - Review findings: B-2, S-1, S-2, S-3, S-8, S-9, N-3.
+    - _Requirements: 5.34, 5.35, 6.13, 6.14, 6.15, 10.10, 11.11, 12.1, 12.9, 12.10, 12.11, 16.1_
+
+  - [x] 4.7 Update the public surface and strengthen the surface guard
+    - Depends on tasks 4.5 and 4.6.
+    - S-5: in `index.ts`, remove the exports `writeCanonicalJson` and `SchemaNode`; keep every other export (Req 7.16).
+    - N-5: `surface.test.ts` and `surface.snapshot.json` record the declaration text of every export (Req 12.12), not only names. Regenerate the snapshot once from the corrected `index.ts`; do not hand-edit it.
+    - Update `src/domain/__tests__/index.test.ts` only if it references the removed exports.
+    - Files owned: `src/domain/index.ts`, `src/domain/__tests__/surface.test.ts`, `src/domain/__tests__/surface.snapshot.json`, `src/domain/__tests__/index.test.ts`.
+    - Review findings: S-5, N-5.
+    - _Requirements: 7.16, 12.1, 12.6, 12.12_
+
 - [ ] 5. INTERFACE FREEZE checkpoint
-  - Ensure `vitest --run` and the type check pass, the surface snapshot is committed, and the stub list in task 4.2 is complete.
+  - Entry conditions, all required before the freeze: (1) tasks 4.5, 4.6 and 4.7 are done; (2) a second independent review of `src/domain` against the spec (`requirements.md`, `design.md`, steering) is saved under `docs/reviews/` with the verdict `PASS`, written by a reviewer who did not write the code or the G1 fixes; a `FAIL` or missing review blocks the freeze.
+  - Only after both conditions hold: ensure `vitest --run` and the type check pass, the regenerated surface snapshot is committed, and the stub list in task 4.2 is complete. Then declare the freeze.
   - From this point `types.ts`, `result.ts`, `brand.ts`, `limits.ts`, `profile/*`, `index.ts` and all exported signatures change only through a spec update. Crew workers must not edit these files.
   - Ensure all tests pass, ask the user if questions arise.
 
@@ -523,26 +561,28 @@ Conventions for every task:
     { "id": 5, "tasks": ["2.4", "3.4", "3.5", "3.6", "3.7", "4.2"] },
     { "id": 6, "tasks": ["4.3"] },
     { "id": 7, "tasks": ["4.4"] },
-    { "id": 8, "tasks": ["5"] },
-    { "id": 9, "tasks": ["6.1"] },
-    { "id": 10, "tasks": ["6.2", "6.3"] },
-    { "id": 11, "tasks": ["6.4", "6.5", "6.6"] },
-    { "id": 12, "tasks": ["6.7"] },
-    { "id": 13, "tasks": ["6.8", "6.9", "6.10", "6.11", "6.12", "6.13", "6.14", "6.15", "6.16", "6.17", "6.18"] },
-    { "id": 14, "tasks": ["7"] },
-    { "id": 15, "tasks": ["8.1", "8.2", "9.1", "10.1", "11.1", "12.1", "12.2", "12.3", "12.4"] },
-    { "id": 16, "tasks": ["8.3", "8.4", "8.5", "8.6", "9.2", "10.2", "11.2", "11.3"] },
-    { "id": 17, "tasks": ["9.3", "9.4"] },
-    { "id": 18, "tasks": ["9.5", "9.6", "9.7", "9.8", "9.9", "9.10"] },
-    { "id": 19, "tasks": ["13"] },
-    { "id": 20, "tasks": ["14.1", "14.2", "14.4"] },
-    { "id": 21, "tasks": ["14.3", "14.5"] },
-    { "id": 22, "tasks": ["14.6"] },
-    { "id": 23, "tasks": ["14.7", "14.8", "14.9", "14.10", "14.11", "14.12"] },
-    { "id": 24, "tasks": ["15.1"] },
-    { "id": 25, "tasks": ["15.2"] },
-    { "id": 26, "tasks": ["16.1", "16.2", "16.3", "16.4", "16.5", "16.6"] },
-    { "id": 27, "tasks": ["17"] }
+    { "id": 8, "tasks": ["4.5", "4.6"] },
+    { "id": 9, "tasks": ["4.7"] },
+    { "id": 10, "tasks": ["5"] },
+    { "id": 11, "tasks": ["6.1"] },
+    { "id": 12, "tasks": ["6.2", "6.3"] },
+    { "id": 13, "tasks": ["6.4", "6.5", "6.6"] },
+    { "id": 14, "tasks": ["6.7"] },
+    { "id": 15, "tasks": ["6.8", "6.9", "6.10", "6.11", "6.12", "6.13", "6.14", "6.15", "6.16", "6.17", "6.18"] },
+    { "id": 16, "tasks": ["7"] },
+    { "id": 17, "tasks": ["8.1", "8.2", "9.1", "10.1", "11.1", "12.1", "12.2", "12.3", "12.4"] },
+    { "id": 18, "tasks": ["8.3", "8.4", "8.5", "8.6", "9.2", "10.2", "11.2", "11.3"] },
+    { "id": 19, "tasks": ["9.3", "9.4"] },
+    { "id": 20, "tasks": ["9.5", "9.6", "9.7", "9.8", "9.9", "9.10"] },
+    { "id": 21, "tasks": ["13"] },
+    { "id": 22, "tasks": ["14.1", "14.2", "14.4"] },
+    { "id": 23, "tasks": ["14.3", "14.5"] },
+    { "id": 24, "tasks": ["14.6"] },
+    { "id": 25, "tasks": ["14.7", "14.8", "14.9", "14.10", "14.11", "14.12"] },
+    { "id": 26, "tasks": ["15.1"] },
+    { "id": 27, "tasks": ["15.2"] },
+    { "id": 28, "tasks": ["16.1", "16.2", "16.3", "16.4", "16.5", "16.6"] },
+    { "id": 29, "tasks": ["17"] }
   ]
 }
 ```

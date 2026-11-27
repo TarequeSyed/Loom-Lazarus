@@ -66,7 +66,7 @@ src/domain/
     validate.ts            validateDeck, violation collection
     compare.ts             deckEquals, compareCells, deriveDamagedDeck (neutral hook)
   io/
-    canonicalJson.ts       schema-ordered stable JSON writer, shared by deck, session and digest
+    canonicalJson.ts       schema-ordered stable JSON writer, shared by deck, session and digest; INTERNAL, not exported from index.ts (Req 7.17)
     schema.ts              key lists per type, unknown-field walk
     serialize.ts           exportDeckJson, importDeckJson
     migrate.ts             pure migrations by schemaVersion
@@ -147,6 +147,15 @@ export interface ViolationReport {
 export interface ReportedError extends DomainError { readonly report: ViolationReport }
 ```
 
+Public helpers in `result.ts`, part of the exported surface:
+
+```ts
+export function ok<T>(value: T): Result<T, never>;
+export function err<E extends DomainError>(error: E): Result<never, E>;
+/** Builds a DomainError from the registry. `detail` is appended after the fixed ERROR_MESSAGES[code] prefix; `path` is included only when given. */
+export function makeError(code: ErrorCode, detail?: string, path?: string): DomainError;
+```
+
 The `ErrorCode` registry is the complete list in Requirement 16.1. It is defined once in `result.ts` as `ERROR_CODES` (a `readonly` tuple) and `ErrorCode` is derived from it. The full list is in "Error Handling". Codes are never renamed or reused; a code's meaning does not change across minor interface versions (Req 16.2).
 
 ### Branded coordinate types (Req 3.6)
@@ -168,7 +177,19 @@ export interface PhysicalLocation { readonly xMm: Millimetres; readonly yMm: Mil
 export interface FabricCoordinate { readonly warpIndex: WarpIndex; readonly passIndex: PassIndex }
 ```
 
-Constructors (`asGridRow`, `asReadIndex`, ...) return `Result` and check integer and range where the range is known. Brands are compile-time only, so values stay plain structured-cloneable numbers.
+Constructors (`asGridRow`, `asReadIndex`, ...) return `Result` and check integer and range where the range is known (an optional exclusive upper bound). Brands are compile-time only, so values stay plain structured-cloneable numbers.
+
+Error codes of the constructors (Req 3.7, 4.4, 4.11). A non-integer and an out-of-range value give the same code, so one concept never has two codes:
+
+| Constructor | Error code for a non-integer, negative or out-of-range value |
+|-------------|------------------------------------------------------------|
+| `asGridRow`, `asGridColumn` | `POSITION_OUT_OF_RANGE` |
+| `asReadIndex` | `READ_INDEX_OUT_OF_RANGE` |
+| `asWarpIndex` | `POSITION_OUT_OF_RANGE` (a fabric position, Req 3.7) |
+| `asPassIndex` | `SEEK_OUT_OF_RANGE` |
+| `asMillimetres`, `asActionId`, `asSequenceNumber` | `INVALID_FORMAT` |
+
+`POSITION_OUT_OF_RANGE` means a grid or fabric position out of range. It is also the code for a thread offset outside `[0, threadsPerHook)` (Req 3.7).
 
 ### Machine profile
 
@@ -208,7 +229,7 @@ export type MirrorOrientation = "none" | "mirrored";
 export type CardToPassSpec = { readonly kind: "one-card-per-pass" };   // room for future variants without schema break
 export interface PhysicalDimensions {
   readonly cardWidthMm: number; readonly cardHeightMm: number;
-  readonly originXMm: number; readonly originYMm: number;      // centre of grid (0,0)
+  readonly originXMm: number; readonly originYMm: number;      // centre of grid position (0,0) (Req 4.10)
   readonly rowPitchMm: number; readonly columnPitchMm: number; readonly holeDiameterMm: number;
 }
 
@@ -242,7 +263,26 @@ compileProfile(p):
 
 **Reserved positions (A1).** The eight positions are a placeholder: row 25 (the middle row of 51), columns 0 to 7, role `"alignment (placeholder)"`. Their `VerificationStatus` is `{ status: "unverified", basis: "geometric-inference", note: "Location inferred from the 51 x 8 grid geometry. This is a placeholder. It was not observed in the paper's figures." }`. A correction is made by editing `reservedPositions` (and `verification.reservedPositions`) in profile data only. UI and SVG exports show the basis and note (Req 2.7, 11.10).
 
-**Verification rules.** A field marked `verified` without a non-empty `source` fails with `INVALID_PROFILE` naming the field (Req 2.11). Other profile failures give `INVALID_PROFILE` with a path, except a readable-count mismatch (`PROFILE_COUNT_MISMATCH`) and a bad mapping entry (`HOOK_MAPPING_INVALID`).
+**Compiled profile (public types).** `compileProfile` returns the following. These types are part of the exported surface and the encoding below is documented, so callers may rely on it.
+
+```ts
+export interface CompiledGridPosition { readonly gridRow: number; readonly gridColumn: number }
+export interface CompiledProfile {
+  readonly gridRows: number;
+  readonly gridColumns: number;
+  readonly readableCount: number;
+  readonly readToGrid: readonly CompiledGridPosition[];   // indexed by readIndex, length readableCount
+  readonly gridToRead: readonly number[];                 // indexed by gridRow * gridColumns + gridColumn;
+                                                          // -1 marks a reserved position; length gridRows * gridColumns
+  readonly reserved: ReadonlySet<number>;                 // the same grid keys (gridRow * gridColumns + gridColumn)
+}
+export function validateProfile(p: unknown): Result<MachineProfile, ReportedError>;
+export function compileProfile(p: MachineProfile): Result<CompiledProfile, ReportedError>;
+```
+
+The compile cache is keyed on object identity, so profiles are treated as immutable (Req 1.2). `GARIN_PROFILE` is deep-frozen at module load.
+
+**Verification rules.** `validateProfile` returns the specific error code of the first violation at the top level, with the full violation report attached (`ReportedError`, Req 2.13): `PROFILE_COUNT_MISMATCH` for a readable-count mismatch, `HOOK_MAPPING_INVALID` for a bad mapping entry (unknown `kind` or invalid parameters, Req 14.5), and `INVALID_PROFILE` with a path only for violations that have no more specific code, including a field marked `verified` without a non-empty `source` (Req 2.11). `INVALID_PROFILE` is not a wrapper for the other two. The same applies to profile violations found inside `validateDeck` (Req 6.15).
 
 ### Cells, evidence, history and the Effective_View
 
@@ -404,9 +444,23 @@ Two mappings are offered. Neither is claimed as verified.
 Here `t` is `threadsPerHook`. For both, `warpCount = readableCount * t` and mirror is applied afterwards: `mirrored(w) = warpCount - 1 - w`. The mapping choice does not alter the Deck.
 
 ```ts
-export function warpCount(profile: MachineProfile, cfg: LoomConfiguration): number;
-export function hookWarpIndices(profile: MachineProfile, cfg: LoomConfiguration, hook: ReadIndex): readonly WarpIndex[];
-// pre-mirror, then mirror; ascending order of k for "none", result sorted ascending
+/** Structural subset of LoomConfiguration; a LoomConfiguration is assignable to it. `hookMapping` and `mirror` are optional only so partial or unvalidated input (for example from JSON) is assignable. There is no default: the functions return HOOK_MAPPING_NOT_CONFIGURED or MIRROR_NOT_CONFIGURED when either is absent. */
+export interface HookMappingConfig {
+  readonly threadsPerHook: number;
+  readonly hookMapping?: HookMappingKind;
+  readonly mirror?: MirrorOrientation;
+}
+export function warpCount(profile: MachineProfile, cfg: HookMappingConfig): Result<number>;
+export function hookWarpIndices(profile: MachineProfile, cfg: HookMappingConfig, hook: ReadIndex): Result<readonly WarpIndex[]>;
+// pre-mirror, then mirror; result sorted ascending
+```
+
+Both functions return `Result` and never throw for expected failures (Req 14.13). Neither the hook mapping nor the mirror orientation has an implicit default (Req 8.5, 14.2). `HookMappingConfig` declares `hookMapping` and `mirror` optional only so that a `LoomConfiguration` and partial or unvalidated inputs are assignable; both functions reject an absent value. Check order, first failure returned, identical in `warpCount` and `hookWarpIndices`: (1) `INVALID_THREADS_PER_HOOK` (not an integer in [1, 64]); (2) `HOOK_MAPPING_NOT_CONFIGURED` (`hookMapping` absent); (3) `UNSUPPORTED_HOOK_MAPPING` (unknown kind, or not among `profile.hookMappings`); (4) `MIRROR_NOT_CONFIGURED` (`mirror` absent); (5) `UNSUPPORTED_MIRROR` (unknown value, or not among `profile.mirrorOptions`); (6) for `hookWarpIndices` only, `READ_INDEX_OUT_OF_RANGE` (`hook` not an integer in `[0, readableCount - 1]`). `HOOK_MAPPING_INVALID` is reserved for bad profile data (Req 14.5) and is never returned here.
+
+```ts
+export function validateLoomConfig(cfg: unknown, profile: MachineProfile): Result<LoomConfiguration>;
+// Checks a LoomConfiguration that arrives without makeLoomConfig (for example from JSON). Shape first (wrong shape or profileId mismatch: INVALID_FORMAT), then the makeLoomConfig order:
+// INVALID_THREADS_PER_HOOK, HOOK_MAPPING_NOT_CONFIGURED, UNSUPPORTED_HOOK_MAPPING, MIRROR_NOT_CONFIGURED, UNSUPPORTED_MIRROR. Never defaults an input.
 ```
 
 Consequences with the 4,000,000-cell cap (D1), identical for both mappings, documented in `docs/domain-loom.md`:
@@ -441,10 +495,14 @@ export function fabricCellAt(buf: FabricBuffer, c: FabricCoordinate): FabricCell
 export function fabricToCells(buf: FabricBuffer): readonly (readonly FabricCell[])[];  // rectangular view (Req 8.12)
 
 export function decodeCard(deck: Deck, cardIndex: number): Result<readonly Bit[]>;
+// CARD_INDEX_OUT_OF_RANGE (cardIndex not an integer in [0, card count - 1]), then UNRESOLVED_CELL (Req 12.11)
 export function passResult(deck: Deck, cfg: LoomConfiguration, passIndex: PassIndex): Result<FabricRow>;
+// preconditions as below, then SEEK_OUT_OF_RANGE (passIndex not an integer in [0, passCount - 1])
 export function fabricCoordinate(readIndex: ReadIndex, threadOffset: number, passIndex: PassIndex,
   cfg: LoomConfiguration, profile: MachineProfile): Result<FabricCoordinate>;
 ```
+
+`fabricCoordinate` check order: the `HookMappingConfig` checks of `hookWarpIndices` (including `READ_INDEX_OUT_OF_RANGE`), then `POSITION_OUT_OF_RANGE` for a `threadOffset` that is not an integer in `[0, threadsPerHook)` (Req 3.7), then `SEEK_OUT_OF_RANGE` for a non-integer or negative `passIndex` (Req 4.11). Consistency: for every valid input, `fabricCoordinate(h, k, p, cfg, profile).warpIndex` equals the `k`-th element of the pre-mirror indices for hook `h`, after mirror, and therefore is a member of `hookWarpIndices(profile, cfg, h)`.
 
 Rows store only lifted indices, so memory is proportional to lifted threads, not to the 4,000,000-cell cap. `fabricToCells` builds the rectangular view on demand. Performance is measured, not asserted (see Testing Strategy).
 
@@ -489,7 +547,10 @@ Rules:
 // card.ts
 export function createCard(profile: MachineProfile, cardId: string,
   observations: readonly CellSeed[]): Result<Card>;      // length must equal readableCount
-export interface CellSeed { raw: RawObservation; initial?: CellInitial }  // initial defaults: observed if raw.value present, else ambiguous with no value; in both cases restorationConfidence is null (not evaluated) and evidence is "no observation" for the ambiguous case. Detection observes holes; it does not evaluate restoration correctness (Req 12.2).
+export interface CellSeed { raw: RawObservation; initial?: Omit<CellInitial, "restorationConfidence"> }
+// initial defaults: observed if raw.value present, else ambiguous with no value and evidence "no observation".
+// createCard ALWAYS writes restorationConfidence: null (not evaluated); a seed cannot carry a confidence (Req 12.10).
+// Seed provenance is "observed" or "ambiguous" only. Detection observes holes; it does not evaluate restoration correctness (Req 12.2).
 export function getCell(deck: Deck, cardId: string, readIndex: number): Result<Cell>;   // UNKNOWN_CARD | READ_INDEX_OUT_OF_RANGE
 export function effectiveView(cell: Cell): EffectiveView;
 export function setObservation... // not provided: raw is fixed at creation
@@ -498,6 +559,7 @@ export function setObservation... // not provided: raw is fixed at creation
 export interface UserEditInput { cardId: string; readIndex: number; value: Bit; editNote: string; actionId: ActionId }
 export function userEdit(deck: Deck, i: UserEditInput): Result<Deck>;
 export function undoEdit(deck: Deck, i: { cardId: string; readIndex: number; actionId: ActionId }): Result<Deck>;
+// undoEdit order: UNKNOWN_CARD, READ_INDEX_OUT_OF_RANGE, DUPLICATE_ACTION_ID, NOTHING_TO_UNDO
 export interface InferenceInput { cardId: string; readIndex: number; actionId: ActionId;
   provenance: string; value?: Bit; confidence: number; evidence: Evidence }  // confidence is a finite number in [0,1]; null is rejected (an inference is an evaluation)
 export function setInferred(deck: Deck, i: InferenceInput): Result<Deck>;
@@ -523,11 +585,20 @@ Behaviour:
 
 - **`userEdit`.** Checks in order: `UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE`, `DUPLICATE_ACTION_ID`, `EDIT_NOTE_REQUIRED` (empty note), `EVIDENCE_TOO_LONG` (note over 1,000 chars). On success it returns a new Deck in which the cell gains one `user-edit` entry holding `actionId`, the next entry sequence, previous value and provenance, new value, `editNote` and `approvalBefore`. `raw`, `initial`, Restoration_Confidence and Evidence are unchanged. If the deck was `approved`, one `ApprovalRecord` of state `unapproved`, cause `edit`, same `actionId`, is appended. Every Restoration_Confidence, including `null`, is unchanged.
 - **`undoEdit`.** The latest entry of that cell's history must be a `user-edit` entry that no `undo` entry reverses; otherwise `NOTHING_TO_UNDO`. Success appends one `undo` entry with `reverses` set to that entry's `actionId` and `restoredValue` / `restoredProvenance` taken from that entry's `previousValue` / `previousProvenance`. If `currentApproval(deck)` differs from the reversed entry's `approvalBefore`, an `ApprovalRecord` (cause `undo`, same `actionId`) carrying `approvalBefore` is appended. No entry is removed or modified, and Restoration_Confidence (including `null`) is untouched. Undo never reverses an inference (D2, Req 5.16); that is `withdrawInference`. Because the latest entry after an undo is an `undo` entry, a second `undoEdit` on the same cell returns `NOTHING_TO_UNDO` until a new edit is made (see Q4). The same holds when the latest entry is a `withdrawal` entry (Req 5.32).
-- **`setInferred`.** `provenance` must be one of the five values or `INVALID_PROVENANCE`; `observed` gives `INFERENCE_CANNOT_BE_OBSERVED`; `user-edited` is not an inference provenance and gives `INVALID_PROVENANCE`. Evidence text must be non-empty (`EVIDENCE_REQUIRED`) and at most 1,000 chars (`EVIDENCE_TOO_LONG`). Confidence must be a finite number in [0,1]. `null`, `undefined`, a non-number, `NaN`, an infinity or an out-of-range value returns `PROBABILITY_OUT_OF_RANGE` and leaves the Deck unchanged (Req 5.18a). If the cell's current provenance is `user-edited` and its latest user edit has not been reversed, the result is `INVALID_EDIT`: restoration must not overwrite a human decision. Success appends one `inference` entry whose `previous` field holds the Previous_Fields (the view before the call, including a `null` confidence and the earlier evidence), and leaves `raw` untouched. An inference after a withdrawal is accepted like any other when no un-reversed user edit protects the cell (Req 5.33).
+- **`setInferred`.** Check order, first failure returned: `UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE`, `DUPLICATE_ACTION_ID`, then the input checks below, then `INVALID_EDIT` (protected user edit). `provenance` must be one of the five values or `INVALID_PROVENANCE`; `observed` gives `INFERENCE_CANNOT_BE_OBSERVED`; `user-edited` is not an inference provenance and gives `INVALID_PROVENANCE`. **Value rules (Req 5.34, 5.35):** `repeat-inferred` or `symmetry-inferred` without a `value` gives `INVALID_PROVENANCE`; `ambiguous` with a `value` gives `INVALID_PROVENANCE`. An `ambiguous` entry that carries an effective value is therefore written only by `requestApproval` with the explicit ambiguous-as-down policy, with `policyNote` set; `InferenceInput` has no `policyNote`, so `setInferred` can never produce a Deck that `validateDeck` rejects for this reason. `ambiguous` without a value is accepted (it records an unresolved cell with its evidence and confidence). Evidence text must be non-empty (`EVIDENCE_REQUIRED`) and at most 1,000 chars (`EVIDENCE_TOO_LONG`). Confidence must be a finite number in [0,1]. `null`, `undefined`, a non-number, `NaN`, an infinity or an out-of-range value returns `PROBABILITY_OUT_OF_RANGE` and leaves the Deck unchanged (Req 5.18a). If the cell's current provenance is `user-edited` and its latest user edit has not been reversed, the result is `INVALID_EDIT`: restoration must not overwrite a human decision. Success appends one `inference` entry whose `previous` field holds the Previous_Fields (the view before the call, including a `null` confidence and the earlier evidence), and leaves `raw` untouched. An inference after a withdrawal is accepted like any other when no un-reversed user edit protects the cell (Req 5.33).
 - **`withdrawInference`.** Checks in this fixed order and returns the first failure, leaving the Deck unchanged: `UNKNOWN_CARD`; `READ_INDEX_OUT_OF_RANGE` (not an integer in `[0, readableCount - 1]`); `DUPLICATE_ACTION_ID` (the action id already exists in the Deck's history); `INVALID_EDIT` (the latest Live_Entry of the cell is a `user-edit` entry); `NOTHING_TO_WITHDRAW` (the cell has no Live_Entry, or its latest Live_Entry is not an `inference` entry). On success it appends one `withdrawal` entry holding the new `actionId`, the next entry sequence, `reverses` set to the withdrawn entry's `actionId`, and `restored` equal to that entry's `previous`. If `currentApproval(deck)` is `approved`, it also appends an `ApprovalRecord` (`unapproved`, cause `withdrawal`, same `actionId`), including when the withdrawn inference is the value an earlier approval covered; if `unapproved`, it appends no approval record. No entry is removed or modified, `raw` is untouched, and no other cell changes. Policy entries written by `requestApproval` are inference entries and are withdrawable by the same rules. No operation reverses a withdrawal (Req 5.33). Withdrawal is not a Session replay shortcut: it is applied through `applySessionAction` like every other action.
-- **Structure operations** (reorder, insert, remove, duplicate) return a new Deck, keep each surviving cell byte for byte (provenance, evidence, confidence including `null`, history), and append an `unapproved` record (cause `structure`) with the supplied `actionId`. `reorderCards` with an unknown or repeated `cardId`, or an order that is not a permutation, returns `INVALID_REORDER` and leaves the Deck unchanged. `removeCard` of the last card gives `DECK_SIZE_OUT_OF_RANGE`.
-- **`requestApproval`.** If any cell has no effective value and no policy is supplied: `UNRESOLVED_CELLS` with up to 100 `{cardId, readIndex}` entries and a total count. With the explicit policy, every such cell gets one `inference` entry (value 0, provenance `ambiguous`, confidence (possibly `null`) and evidence copied from its previous view, `policyNote` set to the policy note, derived `actionId` `"<actionId>#<cardId>#<readIndex>"`). Then an `ApprovalRecord` (`approved`, cause `approve`, the supplied `actionId`, `policyNote`) is appended. Raw observation, Restoration_Confidence (including `null`) and Evidence are unchanged (Req 5.24).
-- **`revokeApproval`** appends an `unapproved` record (cause `revoke`). The audit trail is the `approvals` list; no timestamp exists.
+- **Structure operations** (reorder, insert, remove, duplicate) return a new Deck, keep each surviving cell byte for byte (provenance, evidence, confidence including `null`, history), and append an `unapproved` record (cause `structure`) with the supplied `actionId`. Check orders, first failure returned:
+  - `reorderCards`: `DUPLICATE_ACTION_ID`, `INVALID_REORDER` (unknown or repeated `cardId`, or not a permutation).
+  - `insertCard`: `DUPLICATE_ACTION_ID`, `CARD_INDEX_OUT_OF_RANGE` (`at` not an integer in `[0, card count]`, Req 6.14), `INVALID_FORMAT` (card of another profile or wrong cell count: `CELL_COUNT_MISMATCH`), `DUPLICATE_CARD_ID`, `INVALID_EDIT_HISTORY` (any cell of the supplied card has a non-empty `history`, Req 6.13), `DECK_SIZE_OUT_OF_RANGE` (result above 10,000 cards).
+  - `removeCard`: `DUPLICATE_ACTION_ID`, `UNKNOWN_CARD`, `DECK_SIZE_OUT_OF_RANGE` (removing the last card).
+  - `duplicateCard`: `DUPLICATE_ACTION_ID`, `UNKNOWN_CARD`, `DUPLICATE_CARD_ID` (`newCardId` exists), `INVALID_EDIT_HISTORY` (the source card has any cell with a non-empty `history`, Req 6.13), `DECK_SIZE_OUT_OF_RANGE`.
+
+  Insert and duplicate reject Cards with history because copying entries would repeat Action_Ids and Sequence_Numbers, which must be unique deck-wide (Req 6.5). A Card with no history is inserted or duplicated with every field kept, so the "byte for byte" preservation above holds for it.
+- **`createDeck`** checks: `DUPLICATE_ACTION_ID` is not applicable (empty history); `DECK_SIZE_OUT_OF_RANGE`, `DUPLICATE_CARD_ID`, `CELL_COUNT_MISMATCH`, `INVALID_EDIT_HISTORY` (a supplied card with history, since the new Deck starts at `lastEntrySequence` 0).
+- **`createCard`** checks: `CELL_COUNT_MISMATCH` (seed count differs from `readableCount`), `INVALID_PROVENANCE` (a seed with provenance other than `observed` or `ambiguous`, Req 12.10), `OBSERVED_WITHOUT_OBSERVATION`, `PROBABILITY_OUT_OF_RANGE` (a `holeLikelihood` outside [0, 1] or not finite), `EVIDENCE_TOO_LONG`. No order requirement beyond this list.
+- **`getCell` / `getCellByCardAndIndex`**: `UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE`.
+- **`requestApproval`.** Check order: `DUPLICATE_ACTION_ID`, then `UNRESOLVED_CELLS` (below). If any cell has no effective value and no policy is supplied: `UNRESOLVED_CELLS` with up to 100 `{cardId, readIndex}` entries and a total count. With the explicit policy, every such cell gets one `inference` entry (value 0, provenance `ambiguous`, confidence (possibly `null`) and evidence copied from its previous view, `policyNote` set to the policy note, derived `actionId` `"<actionId>#<cardId>#<readIndex>"`). Then an `ApprovalRecord` (`approved`, cause `approve`, the supplied `actionId`, `policyNote`) is appended. Raw observation, Restoration_Confidence (including `null`) and Evidence are unchanged (Req 5.24).
+- **`revokeApproval`** (check order: `DUPLICATE_ACTION_ID`) appends an `unapproved` record (cause `revoke`). The audit trail is the `approvals` list; no timestamp exists.
 
 ### Validation
 
@@ -542,15 +613,18 @@ Violations are collected up to 100 with a total count. The input is never modifi
 - Deck: 1 to 10,000 cards; unique `cardId`; every card has exactly `readableCount` cells; `schemaVersion` supported.
 - Cell, computed from `effectiveView`: provenance in the five values; `observed` with no `raw.value` gives `OBSERVED_WITHOUT_OBSERVATION`; `raw.holeLikelihood` finite in [0,1] when present, and every `restorationConfidence` (in `initial`), inference `confidence`, `previous.confidence` and `restored.confidence` either `null` or a finite number in [0,1], else `PROBABILITY_OUT_OF_RANGE` naming the cell (`null`, `0` and `1` accepted; `-0.0001`, `1.0001`, `NaN`, `Infinity`, `-Infinity` rejected); a `restorationConfidence` field that is absent or `undefined` gives `MISSING_REQUIRED_FIELD` with the cell path and is never treated as `null` (Req 17.2); an inference entry with `confidence: null` is valid only when it carries a `policyNote`; `repeat-inferred` and `symmetry-inferred` views need non-empty evidence of at most 1,000 chars; any evidence over 1,000 chars is `EVIDENCE_TOO_LONG`; `ambiguous` with a value requires an `inference` entry with `policyNote`.
 - History: every `actionId` unique within the entry list; entry `sequence` values form `1..lastEntrySequence` with no gap or repeat across the deck; each `undo.reverses` names an earlier `user-edit` entry of the same cell that no earlier `undo` reverses, otherwise `INVALID_EDIT_HISTORY` with the path; each entry's `previous*` fields (and an inference entry's `previous` Previous_Fields, including confidence and evidence) match the view before it. Each `withdrawal.reverses` must name an earlier `inference` entry of the same cell that no earlier `withdrawal` reverses (a missing id, a `user-edit` entry, an inference of another cell, a later entry or an already-withdrawn inference gives `INVALID_EDIT_HISTORY` with the path of the withdrawal entry), and `withdrawal.restored` must equal the `previous` of the referenced inference entry (a mismatch is `INVALID_EDIT_HISTORY`). A `previous` or `restored` object lacking `confidence` gives `MISSING_REQUIRED_FIELD` with its path and is never defaulted. Action_Id uniqueness and sequence consistency apply to withdrawal entries exactly as to other entries (Req 6.11, 6.12).
-- Approvals: non-empty; sequences contiguous from 1; unique `actionId`s.
+- Approvals: non-empty and sequences contiguous from 1 (`INVALID_APPROVAL_HISTORY`); unique `actionId`s (`DUPLICATE_ACTION_ID`).
 - Approved deck: no cell without an effective value (`UNRESOLVED_CELL` with card and `readIndex`).
 
-The wrapper error is `INVALID_DECK` with the report. A single-violation report still carries its specific code in `report.violations[0].code`.
+The wrapper error for a Deck is `INVALID_DECK` with the report (`ReportedError`). A single-violation report still carries its specific code in `report.violations[0].code`. For a Machine_Profile the top-level code is the first violation's specific code, not a wrapper (Req 2.13).
+
+**Validator code assignments (Req 6.15).** Approval list empty, or Approval_Record sequences not contiguous from 1: `INVALID_APPROVAL_HISTORY`. A duplicate Action_Id anywhere in the Deck (entries and approval records): `DUPLICATE_ACTION_ID`. An Edit_History entry sequence that is inconsistent (not `1..lastEntrySequence` without gap or repeat): `INVALID_EDIT_HISTORY`. Profile violations inside a Deck keep the profile's own codes, including `HOOK_MAPPING_INVALID`. A tampered `lastEntrySequence` is `INVALID_EDIT_HISTORY`.
 
 ### JSON serialization
 
 ```ts
-export function exportDeckJson(deck: Deck, extras?: { weftColourLayer?: WeftColourLayer }): Result<string>;
+export function exportDeckJson(deck: Deck, extras?: { weftColourLayer?: WeftColourLayer }): Result<string, ReportedError>;
+// Order: INVALID_DECK (validateDeck report, Req 12.9), INVALID_COLOUR_LAYER, INVALID_FORMAT (colour layer of another shape)
 export function importDeckJson(text: string): Result<ImportedDeck, ReportedError>;
 export interface ImportedDeck { readonly deck: Deck; readonly weftColourLayer?: WeftColourLayer;
   readonly meta: { readonly sourceSchemaVersion: number; readonly migrations: readonly string[] } }
@@ -598,7 +672,9 @@ Shapes of the two history entries added for inference and withdrawal (same stabl
 ```
 
 Rules:
-- **Stable output.** A schema-ordered canonical writer (`io/canonicalJson.ts`), two-space indent, `\n` line endings, no timestamps, finite numbers only, optional absent fields omitted (never `null`). The one exception is `restorationConfidence` (and an inference entry's `confidence` when it copies a null, and the `confidence` of every `previous` and `restored` object): the field is always written, and `null` is written as the JSON literal `null`, distinct from `0`. The writer never coerces `null` to `0` or `0` to `null`. Equal Decks give byte-identical text.
+- **Single top-level `schemaVersion`.** The deck file carries one `schemaVersion` at the top, as in the example above. `deck` and the cards inside the file do not repeat it; the importer supplies `schemaVersion: 1` to the in-memory `Deck` and each `Card` (Req 7.16). By contrast, the `initialDeck` embedded in a Session_Log carries `schemaVersion` on the Deck and on each Card (see "Session log schema").
+- **Internal writer.** The canonical writer and its `SchemaNode` type are internal to `src/domain` and are not exported from `index.ts` (Req 7.17). Later specs obtain canonical text only through `exportDeckJson`, `exportSessionLog` and `stateDigest`. The schema nodes stay private.
+- **Stable output.** A schema-ordered canonical writer (`io/canonicalJson.ts`), two-space indent, `\n` line endings, the text ends with exactly one trailing `\n` (Req 7.16; goldens include it), no timestamps, finite numbers only, optional absent fields omitted (never `null`). The one exception is `restorationConfidence` (and an inference entry's `confidence` when it copies a null, and the `confidence` of every `previous` and `restored` object): the field is always written, and `null` is written as the JSON literal `null`, distinct from `0`. The writer never coerces `null` to `0` or `0` to `null`. Equal Decks give byte-identical text.
 - **Null confidence on import.** The reader returns `null` as `null`. A cell that lacks `restorationConfidence` is a validator violation (`MISSING_REQUIRED_FIELD`, path to the cell); the reader does not default it to `null` or `0` and returns no partial Deck (Req 7.13).
 - **Import order** (first failure returned, nothing partial): size check, above 8 MiB gives `INPUT_TOO_LARGE` before parsing; `JSON.parse` failure gives `INVALID_JSON`; `format` absent or different gives `INVALID_FORMAT`; `schemaVersion` not an integer or unsupported gives `UNSUPPORTED_SCHEMA_VERSION` naming supplied and supported versions; older supported versions are migrated by pure functions, recorded in `meta.migrations`; unknown field gives `UNKNOWN_FIELD` with path; `validateDeck` violations are returned as `INVALID_DECK` with the report. No partial Deck is ever returned.
 - **Colour layer.** Only at top level as `weftColourLayer` with its label. Cards and cells have no colour fields, and the unknown-field walk enforces it (Req 7.9).
@@ -662,12 +738,34 @@ Payload per kind (all validated structurally before application; `actionId` of t
 ```ts
 export interface RecordingSession { readonly log: SessionLog; readonly state: SessionState }  // state = after last action
 
-export function createSession(deck: Deck, config?: LoomConfiguration): Result<RecordingSession>;
-// validates the Deck first (Req 15.17), actionCount 0
+export function createSession(deck: Deck, config?: LoomConfiguration): Result<RecordingSession, ReportedError>;
+// validates the Deck first (Req 15.17); INVALID_DECK carries the violation report (Req 12.9); then validateLoomConfig codes for config; actionCount 0
+
+/** Log-level context passed to the single dispatcher. */
+export interface SessionLogContext { readonly initialLoomConfiguration?: LoomConfiguration }
+
+/** One payload type per kind; SessionPayload is their union (shapes in the payload table). */
+export interface UserEditPayload { cardId: string; readIndex: number; value: Bit; editNote: string }
+export interface UndoEditPayload { cardId: string; readIndex: number }
+export interface SetInferredPayload { cardId: string; readIndex: number; provenance: string; value?: Bit; confidence: number; evidence: Evidence }
+export interface WithdrawInferencePayload { cardId: string; readIndex: number }
+export interface RequestApprovalPayload { policy?: AmbiguousAsDownPolicy }
+export type RevokeApprovalPayload = Record<string, never>;
+export interface ReorderCardsPayload { order: readonly string[] }
+export interface InsertCardPayload { card: Card; at: number }
+export interface RemoveCardPayload { cardId: string }
+export interface DuplicateCardPayload { cardId: string; newCardId: string }
+export interface SimCreatePayload { loomConfiguration?: LoomConfiguration }
+export type SimEmptyPayload = Record<string, never>;   // sim-step, sim-pause, sim-resume, sim-reset
+export interface SimSeekPayload { passIndex: number }
+export type SessionPayload = UserEditPayload | UndoEditPayload | SetInferredPayload | WithdrawInferencePayload
+  | RequestApprovalPayload | RevokeApprovalPayload | ReorderCardsPayload | InsertCardPayload | RemoveCardPayload
+  | DuplicateCardPayload | SimCreatePayload | SimEmptyPayload | SimSeekPayload;                  // eleven named payload interfaces/aliases plus SimEmptyPayload and SimSeekPayload
 export interface SessionActionInput { actionId: ActionId; kind: SessionActionKind; payload: SessionPayload }
 export function applySessionAction(state: SessionState, input: SessionActionInput, log: SessionLogContext): Result<SessionState>;
 // the single dispatcher used by appendAction and replay (Req 15.5)
 export function appendAction(s: RecordingSession, input: SessionActionInput): Result<RecordingSession>;
+// order: DUPLICATE_ACTION_ID (actionId already in the log), SESSION_TOO_LARGE (log at 100,000 actions), then the action's own error
 // applies to s.state, assigns sequence = actionCount + 1, records stateDigest, increments actionCount.
 // On failure returns the failed action's error and the log is unchanged (nothing recorded).
 
@@ -678,7 +776,7 @@ export function exportSessionLog(log: SessionLog): Result<string>;
 export function importSessionLog(text: string): Result<SessionLog, ReportedError>;
 ```
 
-**State_Digest.** `stateDigest` hashes, with 64-bit FNV-1a over UTF-8 bytes, the canonical JSON of `{ deck, simulation? }` produced by the shared canonical writer. In that form the simulation's deck snapshot is represented by its own digest string (`deckDigest`) instead of a second copy of the deck. A `null` Restoration_Confidence is written as the literal `null` in that canonical JSON, so a state with `null` and the same state with `0` have different digests. The result is 16 lowercase hex characters. The algorithm name is stored in the log. It detects corruption and accidental divergence. It is not tamper-proof and is never described as such (Req 15.19). The digest can be streamed through the writer without building the full string; whether that is needed is decided from measurement.
+**State_Digest.** `stateDigest` hashes, with 64-bit FNV-1a over UTF-8 bytes, the canonical JSON of `{ deck, simulation? }` produced by the shared canonical writer. In that form (the "digest form", Req 15.23) the simulation's deck snapshot is replaced by a `deckDigest` key holding the digest of that snapshot's canonical JSON, instead of a second copy of the deck. The in-memory `SimulationState` keeps the full `deck` snapshot and the persisted `SimulationState` schema node stays as is; only the digest input substitutes `deckDigest`, so the digest needs its own writer node (`SIMULATION_DIGEST_NODE`) that has `deckDigest` where `SIMULATION_STATE_NODE` has `deck`. A `null` Restoration_Confidence is written as the literal `null` in that canonical JSON, so a state with `null` and the same state with `0` have different digests. The result is 16 lowercase hex characters. The algorithm name is stored in the log. It detects corruption and accidental divergence. It is not tamper-proof and is never described as such (Req 15.19). The digest can be streamed through the writer without building the full string; whether that is needed is decided from measurement.
 
 **Replay algorithm and failure order** (first failure wins; no partial sequence is ever returned, Req 15.8):
 
@@ -708,12 +806,15 @@ Replay leaves the input log unmodified (Req 15.20). Equal logs give state sequen
 
 **Session log schema** (stable key order):
 
+The key set of `initialDeck` is part of the frozen persisted format (it fixes session-log bytes, `stateDigest` input and goldens): `schemaVersion`, `profile`, `cards` (each with `schemaVersion`, `cardId`, `cells`), `approvals`, `lastEntrySequence`, `confidenceCalibration` (Req 15.23). `exportSessionLog` order: `SESSION_TRUNCATED` (`actionCount` differs from `actions.length`), `SESSION_TOO_LARGE`, `INPUT_TOO_LARGE` (text over 32 MiB). `importSessionLog` runs the same order as `replaySessionJson` up to and including `UNKNOWN_FIELD`, without applying actions.
+
 ```json
 {
   "format": "loom-lazarus-session",
   "schemaVersion": 1,
   "digestAlgorithm": "fnv1a-64-v1",
-  "initialDeck": { "profile": {}, "cards": [], "approvals": [], "lastEntrySequence": 0, "confidenceCalibration": "uncalibrated" },
+  "initialDeck": { "schemaVersion": 1, "profile": {}, "cards": [ { "schemaVersion": 1, "cardId": "c-001", "cells": [] } ],
+                   "approvals": [], "lastEntrySequence": 0, "confidenceCalibration": "uncalibrated" },
   "initialLoomConfiguration": { "schemaVersion": 1, "profileId": "garin-51x8", "threadsPerHook": 16,
                                  "hookMapping": "repeat", "mirror": "none" },
   "actionCount": 2,
@@ -732,7 +833,7 @@ export function bitmapToDeck(bitmap: Bitmap, profile: MachineProfile,
   options: { cardIdPrefix: string; actionId: ActionId }): Result<Deck>;
 ```
 
-- Checks in order: `readableCount` above 2,048 or width differing from `readableCount` gives `BITMAP_WIDTH_UNSUPPORTED` stating expected and supplied widths, with no crop, pad or scale; height 0 or above 10,000 gives `BITMAP_HEIGHT_UNSUPPORTED`; a value other than 0 or 1, or unequal row lengths, gives `BITMAP_NOT_BINARY` naming the first row and column.
+- Checks in order: `readableCount` above 2,048 or width differing from `readableCount` gives `BITMAP_WIDTH_UNSUPPORTED` stating expected and supplied widths, with no crop, pad or scale (an empty bitmap `[]` has no width and reports `BITMAP_HEIGHT_UNSUPPORTED` instead, Req 10.10, so the height check runs first when the bitmap has no rows); height 0 or above 10,000 gives `BITMAP_HEIGHT_UNSUPPORTED`; a value other than 0 or 1, or unequal row lengths, gives `BITMAP_NOT_BINARY` naming the first row and column.
 - Bitmap column `c` is `readIndex c`. Card ids are `${prefix}-${zero-padded row}`; deterministic.
 - Every cell: `raw.value` = bit, `initial` provenance `observed`, `restorationConfidence` the number 1 (the specified import value; a supplied bitmap is ground-truth input, so it is not `null`), evidence text "Value supplied from a binary bitmap." with a `note` ref, `holeLikelihood` absent. The Deck starts with one `unapproved` record (cause `init`, the supplied `actionId`, sequence 1).
 - Pattern space (documented): width `readableCount`, reserved positions carry no data. With `threadsPerHook = t`, fabric width is `readableCount * t` and each hook's value spans its `t` threads per the selected mapping: adjacent threads under `contiguous-visualization`, threads spaced `readableCount` apart under `repeat`. At `t = 1`, mirror `none`, either mapping, lifted fabric cells equal the bitmap 1 values row for row.
@@ -748,6 +849,7 @@ export const SVG_CAVEAT =
   "Not validated for physical laser cutting or any physical loom. Dimensions are unverified unless marked verified in the Machine_Profile.";
 ```
 
+- **Profile rule (Req 11.11).** `exportCardSvg` uses `deck.profile`. If `o.profile.profileId` differs from `deck.profile.profileId` the result is `INVALID_FORMAT`. `exportDeckSvg` follows the same rule. Order: `INVALID_EXPORT_OPTIONS`, `INVALID_FORMAT` (profile id), `PHYSICAL_DIMENSIONS_UNAVAILABLE`, `UNKNOWN_CARD` (card not in the deck).
 - `scale` must be a positive finite number and `unit` one of `px` or `mm`, else `INVALID_EXPORT_OPTIONS`. `mm` without `profile.physicalDimensions` gives `PHYSICAL_DIMENSIONS_UNAVAILABLE`.
 - `px` layout is schematic: x = `gridColumn * scale`, y = `gridRow * scale`. Metadata says `geometry="schematic-grid"`; it is not a physical estimate. `mm` layout uses only declared pitches and origin times `scale`.
 - One `<circle>` per lifted readable position (`id="c{cardIndex}-r{readIndex}"`, `class="lifted"`); cells whose view provenance is `repeat-inferred`, `symmetry-inferred` or `ambiguous`-as-down get class `inferred` and `data-provenance`. Reserved positions are separate `<circle class="reserved" id="reserved-{row}-{col}">`. When the reserved-position verification basis is `geometric-inference`, each reserved element carries a `<title>` "inferred location".
@@ -763,11 +865,13 @@ export function deckEquals(a: Deck, b: Deck): boolean;                  // deter
 export interface CellComparison { readonly total: number; readonly matching: number;
   readonly mismatchTotal: number;
   readonly mismatches: readonly { cardId: string; readIndex: ReadIndex; truth?: Bit; candidate?: Bit }[] } // capped at 1000
-export function compareCells(truth: Deck, candidate: Deck): Result<CellComparison>;  // same profile id and card ids required
+export function compareCells(truth: Deck, candidate: Deck): Result<CellComparison, ReportedError>;
+// order: INVALID_DECK (either Deck fails validateDeck, with report), DECK_SHAPE_MISMATCH (different profileId, or different cardId lists; Req 12.9)
 
 export type RandomFn = () => number;                                    // caller supplied, [0,1)
 export type DamageFn = (rng: RandomFn, ctx: { cardId: string; readIndex: ReadIndex; raw: RawObservation }) => RawObservation;
-export function deriveDamagedDeck(truth: Deck, damage: DamageFn, rng: RandomFn, actionId: ActionId): Result<Deck>;
+export function deriveDamagedDeck(truth: Deck, damage: DamageFn, rng: RandomFn, actionId: ActionId): Result<Deck, ReportedError>;
+// order: INVALID_DECK (truth fails validateDeck, with report), then the createCard codes for a damage result that is not a valid RawObservation
 ```
 
 `deriveDamagedDeck` visits cells in card order then `readIndex` order, calls the caller's `damage` with the caller's `rng`, and builds a fresh Deck with new cells from the returned observations (history empty, `initial` as in `createCard`, `unapproved` record). It never reads or writes the truth Deck's raw values in place, defines no damage model and creates no randomness. Damage models and corruption policies belong to the benchmark spec (D7).
@@ -779,13 +883,25 @@ export function deriveDamagedDeck(truth: Deck, damage: DamageFn, rng: RandomFn, 
 | Vision | `GARIN_PROFILE`, `MachineProfile`, `gridToReadIndex`, `readIndexToGrid`, `gridToPhysical`, `createCard`, `CellSeed`, `RawObservation` | Vision converts grid positions to read indices through domain functions, never inventing a read order. Raw and hole likelihood enter only through `createCard`, which sets `restorationConfidence` to `null` (not evaluated) for every cell (Req 12.2). |
 | Restoration | `Cell`, `Evidence`, `setInferred`, `withdrawInference`, `latestLiveEntry`, `PreviousFields`, `getCellByCardAndIndex`, `effectiveView`, `approvalHistory`, `currentApproval`, `userEdit` / `undoEdit` types, `Provenance` | Inference writes only through `setInferred` and is reversed only through `withdrawInference` (never `undoEdit`); `observed` rejected; `user-edited` cells not overwritten (`INVALID_EDIT`); a numeric Restoration_Confidence in [0,1] is assigned only here, and `null` is rejected. |
 | UI | `create` / `step` / `pause` / `resume` / `seek` / `reset` / `runToEnd`, `FabricBuffer`, `fabricToCells`, `createSession`, `appendAction`, `replaySession`, `exportSessionLog`, `ERROR_CODES` and `ERROR_MESSAGES`, `SVG_CAVEAT`, `SIMULATION_DISCLAIMER`, `MachineProfile.verification` (status, basis, note per field and per hook mapping), `approvalHistory`, `effectiveView` | UI owns timers; each tick calls `step` (and `appendAction` when recording). UI shows unverified status and basis, and the `uncalibrated` marker. Benchmark results come from the benchmark spec's `BrowserReport`, not from detection or restoration metric functions. |
-| Benchmark (spec 4) | `deckEquals`, `compareCells`, `deriveDamagedDeck`, `RandomFn`, `DamageFn`, canonical JSON writer, `stateDigest`, `Deck` types, `Deck.confidenceCalibration` | Benchmark supplies the seeded RNG and the damage model. Domain supplies the neutral hook only. |
+| Benchmark (spec 4) | `deckEquals`, `compareCells`, `deriveDamagedDeck`, `RandomFn`, `DamageFn`, `exportDeckJson`, `exportSessionLog`, `stateDigest`, `Deck` types, `Deck.confidenceCalibration` | Benchmark supplies the seeded RNG and the damage model. Domain supplies the neutral hook only. |
 
-`INTERFACE_VERSION = "1.1.0"` is exported (1.1.0 adds `withdrawInference`, `latestLiveEntry`, `PreviousFields`, `WithdrawalEntry`, the `withdraw-inference` session kind, the `withdrawal` approval cause and `NOTHING_TO_WITHDRAW`; this amendment is the spec update Req 12.6 requires). A change to any exported signature after design approval requires a spec update (Req 12.6). Restoration_Confidence is documented as algorithmic and uncalibrated, with `null` meaning not evaluated; `Deck.confidenceCalibration` is `"uncalibrated"` unless a caller supplies a benchmark reference (Req 12.8). `docs/domain-loom.md` carries this text.
+`INTERFACE_VERSION = "1.1.0"` is exported (1.1.0 adds `withdrawInference`, `latestLiveEntry`, `PreviousFields`, `WithdrawalEntry`, the `withdraw-inference` session kind, the `withdrawal` approval cause and `NOTHING_TO_WITHDRAW`; this amendment is the spec update Req 12.6 requires). The G1 review resolutions (see "Amendment record") are pre-freeze corrections: the interface has not been frozen, so the version stays 1.1.0.
+
+**Additional public surface documented by this design (Req 12.1).** `ok`, `err`, `makeError`; `HookMappingConfig`; `CompiledProfile` and `CompiledGridPosition` (encoding in "Machine profile"); `validateLoomConfig`; `SessionLogContext`, `SessionPayload` and the payload types; and the migration entry points:
+
+```ts
+export interface MigrationOutcome { readonly json: unknown; readonly sourceSchemaVersion: number; readonly migrations: readonly string[] }
+export function migrateToCurrent(json: unknown, migrations?: Readonly<Record<number, (json: unknown) => unknown>>): Result<MigrationOutcome>;
+// UNSUPPORTED_SCHEMA_VERSION: not an integer, newer than current, or no migration for a lower version
+```
+
+`MIGRATIONS`, the key tables, `writeCanonicalJson` and `SchemaNode` are internal and are not exported (Req 7.17).
+
+**Surface guard (Req 12.12).** `surface.test.ts` compares `index.ts` against a committed snapshot that records declaration text, not only names: the printed declarations (parameter and return types) of every export, produced with the TypeScript compiler API (or `tsc --declaration --emitDeclarationOnly` output of `index.ts`) inside the test. A changed parameter or return type fails the guard. A change to any exported signature after design approval requires a spec update (Req 12.6). Restoration_Confidence is documented as algorithmic and uncalibrated, with `null` meaning not evaluated; `Deck.confidenceCalibration` is `"uncalibrated"` unless a caller supplies a benchmark reference (Req 12.8). `docs/domain-loom.md` carries this text.
 
 ### Dependencies for later specs
 
-Final spec order: 1 card-domain-and-loom-engine (this spec), 2 card-detection, 3 restoration-engine, 4 benchmark-and-evaluation, 5 UI. The benchmark-and-evaluation spec (4) consumes from this library the neutral `deriveDamagedDeck` hook (caller-supplied damage function and seeded random function; no damage models in the domain), the canonical JSON, the State_Digest and the Deck types. The UI spec (5) consumes the benchmark spec's `BrowserReport` for benchmark results and does not call detection or restoration metric functions for benchmark purposes.
+Final spec order: 1 card-domain-and-loom-engine (this spec), 2 card-detection, 3 restoration-engine, 4 benchmark-and-evaluation, 5 UI. The benchmark-and-evaluation spec (4) consumes from this library the neutral `deriveDamagedDeck` hook (caller-supplied damage function and seeded random function; no damage models in the domain), canonical text through `exportDeckJson` and `exportSessionLog` (the canonical writer itself is internal), `stateDigest` and the Deck types. The UI spec (5) consumes the benchmark spec's `BrowserReport` for benchmark results and does not call detection or restoration metric functions for benchmark purposes.
 
 The card-detection spec maps every detected cell with `restorationConfidence: null`, because detection observes holes and does not evaluate restoration correctness. Only the restoration spec sets a numeric Restoration_Confidence, and only through `setInferred`. The restoration spec undoes an accepted or selected inference by calling `withdrawInference`, never `undoEdit`; this replaces its fallback error `DOMAIN_AMENDMENT_REQUIRED`, and its `undo-action` on an accepted hypothesis can be implemented against this interface. A withdrawal restores the Previous_Fields (including a `null` confidence) and, on an approved Deck, appends an `unapproved` record with cause `withdrawal`. UI code shows `null` as "not evaluated" and never as 0%.
 
@@ -801,10 +917,11 @@ The card-detection spec maps every detected cell with `restorationConfidence: nu
 ```ts
 export function gridToReadIndex(p: MachineProfile, pos: GridPosition): Result<ReadIndex>;   // POSITION_OUT_OF_RANGE | RESERVED_POSITION
 export function readIndexToGrid(p: MachineProfile, i: number): Result<GridPosition>;        // READ_INDEX_OUT_OF_RANGE
-export function gridToPhysical(p: MachineProfile, pos: GridPosition): Result<PhysicalLocation>; // PHYSICAL_DIMENSIONS_UNAVAILABLE | POSITION_OUT_OF_RANGE
+export function gridToPhysical(p: MachineProfile, pos: GridPosition): Result<PhysicalLocation>; // PHYSICAL_DIMENSIONS_UNAVAILABLE, then POSITION_OUT_OF_RANGE (Req 4.10)
 ```
 
-- Grid to read: table lookup after `compileProfile`. A reserved position gives `RESERVED_POSITION`.
+- Grid to read: table lookup after `compileProfile`. A non-integer or out-of-grid position gives `POSITION_OUT_OF_RANGE`, then a reserved position gives `RESERVED_POSITION`. `readIndexToGrid` gives `READ_INDEX_OUT_OF_RANGE` for a non-integer or out-of-range index (Req 4.11).
+- Grid to physical (Req 4.10, assumption A3 unverified): uses only declared `physicalDimensions`. The origin is the centre of grid position (0,0): `xMm = originXMm + gridColumn * columnPitchMm` (x increases with `gridColumn`) and `yMm = originYMm + gridRow * rowPitchMm` (y increases with `gridRow`, row 0 at the top as drawn). Precondition order: `PHYSICAL_DIMENSIONS_UNAVAILABLE` first (a profile without dimensions never estimates), then `POSITION_OUT_OF_RANGE`.
 - Read to physical has no direct path. It goes through the grid and only when dimensions are declared; there is no estimate from grid coordinates (Req 4.6).
 - Hook to warp: the mapping formulas above, then mirror. Fabric coordinate of (hook `h`, thread offset `k`, pass `p`) is `(mirror(mapping(h, k)), p)`.
 - Read order for Garín (documented in `docs/domain-loom.md`, assumption A4 unverified): column by column, starting at the rightmost column, bottom-up within a column, reserved positions skipped. "Bottom" means descending `gridRow`, which depends on A3.
@@ -878,9 +995,9 @@ For any valid MachineProfile and any valid replacement reserved list (distinct, 
 
 ### Property 4: Hook mapping and mirror
 
-For any valid MachineProfile with `readableCount` 1 to 64, any `threadsPerHook` in [1, 64], each permitted hook mapping and each mirror option: every hook maps to exactly `threadsPerHook` distinct warp indices; the union over all hooks equals `[0, readableCount * threadsPerHook - 1]` with no overlap; `contiguous-visualization` yields consecutive indices `h * t + k`; `repeat` yields indices `h + k * readableCount`; mirrored indices equal `warpCount - 1 - w` of the unmirrored indices; `fabricCoordinate` agrees with `hookWarpIndices`; and the Deck is unchanged. The mapping chosen does not change `warpCount`.
+For any valid MachineProfile with `readableCount` 1 to 64, any `threadsPerHook` in [1, 64], each permitted hook mapping and each mirror option: every hook maps to exactly `threadsPerHook` distinct warp indices; the union over all hooks equals `[0, readableCount * threadsPerHook - 1]` with no overlap; `contiguous-visualization` yields consecutive indices `h * t + k`; `repeat` yields indices `h + k * readableCount`; mirrored indices equal `warpCount - 1 - w` of the unmirrored indices; `fabricCoordinate(h, k, p, cfg, profile).warpIndex` equals the `k`-th mirrored pre-mirror index of hook `h` and is a member of `hookWarpIndices(profile, cfg, h)`; and the Deck is unchanged. The mapping chosen does not change `warpCount`. `warpCount` and `hookWarpIndices` take a `HookMappingConfig` and return `Result` values: `ok` for every generated valid input, and for generated invalid input (unknown or unpermitted mapping kind, unpermitted mirror option) `UNSUPPORTED_HOOK_MAPPING` or `UNSUPPORTED_MIRROR` respectively, never a throw and never `HOOK_MAPPING_INVALID`.
 
-**Validates: Requirements 4.7, 8.2, 8.3, 8.7, 14.6, 14.7, 14.8, 13.15**
+**Validates: Requirements 4.7, 8.2, 8.3, 8.7, 14.6, 14.7, 14.8, 14.13, 13.15**
 
 ### Property 5: Deck JSON round trip and byte stability
 
@@ -890,7 +1007,7 @@ For any valid Deck (generated profile with 1 to 16 rows and columns, or Garín, 
 
 ### Property 6: Invalid decks and profiles are rejected, unmodified and unrepaired
 
-For any valid Deck and any one seeded corruption from the enumerated list (duplicate `cardId`; wrong cell count; probability outside [0,1], `NaN` or an infinity; missing or `undefined` `restorationConfidence`; `observed` without raw value; missing evidence on an inferred cell; evidence over 1,000 chars; unsupported `schemaVersion`; approved deck with an unresolved cell; approval sequence gap; duplicate action id; undo that references a missing, later or already-reversed entry; non-distinct reserved positions; `verified` field without source; unknown hook mapping kind), `validateDeck` returns failure whose report contains a violation with the specific code for that corruption, at most 100 violations are listed with a correct total, and the input is deeply equal to a copy taken before validation.
+For any valid Deck and any one seeded corruption from the enumerated list (duplicate `cardId`; wrong cell count; probability outside [0,1], `NaN` or an infinity; missing or `undefined` `restorationConfidence`; `observed` without raw value; missing evidence on an inferred cell; evidence over 1,000 chars; unsupported `schemaVersion`; approved deck with an unresolved cell; approval sequence gap or empty approvals (`INVALID_APPROVAL_HISTORY`); duplicate action id (`DUPLICATE_ACTION_ID`); inconsistent entry sequence (`INVALID_EDIT_HISTORY`); undo that references a missing, later or already-reversed entry; non-distinct reserved positions; `verified` field without source; unknown hook mapping kind), `validateDeck` returns failure whose report contains a violation with the specific code for that corruption, at most 100 violations are listed with a correct total, and the input is deeply equal to a copy taken before validation.
 
 **Validates: Requirements 1.4, 1.7, 2.4, 2.11, 2.12, 5.5, 5.6, 5.7, 7.13, 17.1, 17.2, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.10, 14.5, 13.11**
 
@@ -1034,7 +1151,14 @@ For any valid Deck whose history contains a `withdrawal` entry and any one seede
 
 ### Seed and generator register
 
-Each property is a single `fc.assert(fc.property(...), { seed, numRuns })`. Seeds are distinct constants `20260100 + n`. `numRuns` never exceeds 500 (Req 13.1). Generators are defined in `src/domain/__tests__/generators.ts`.
+Each property is `fc.assert(fc.property(...), { seed, numRuns })`. A property may consist of several `fc.assert` calls (for example separate valid and invalid variants) that all share the property's seed constant (Req 13.26). Property seeds are distinct constants `20260100 + n`. Non-property tests (generator self-checks and auxiliary writer properties) use the named auxiliary seeds `20260190` to `20260199`, recorded in `src/domain/__tests__/seeds.ts` and in this register; no literal seed appears in a test. `numRuns` never exceeds 500 (Req 13.1).
+
+| Auxiliary seed | Use |
+|----------------|-----|
+| 20260190 | Generator self-check: `arbProfile` always validates |
+| 20260191 | Generator self-check: `arbDeck` always validates |
+| 20260192 | Canonical writer: `null` versus `0` and trailing-newline auxiliary property |
+| 20260193 to 20260199 | Reserved for further auxiliary tests; each use is added to this table | Generators are defined in `src/domain/__tests__/generators.ts`.
 
 | Property | Seed | numRuns | Generator precondition (stated in a comment beside the test) |
 |----------|------|---------|-----------------------------------------------------------|
@@ -1073,7 +1197,7 @@ Each property is a single `fc.assert(fc.property(...), { seed, numRuns })`. Seed
 - **No throws for expected failures.** Every public function returns `Result` or a plain value when failure is impossible (`pause`, `resume`, `reset`, `currentApproval`, `effectiveView`). Programmer errors (a TypeScript precondition broken through an unchecked cast) may throw and are unsupported.
 - **Fixed check order per function**, so the same bad input always yields the same first error. The orders for the interpreter, `makeLoomConfig`, `userEdit`, `withdrawInference`, `importDeckJson` and `replaySessionJson` are given above.
 - **No partial results.** On any error a function returns no value and every input is left unchanged. All functions are non-mutating by construction. Tests use a `deepFreeze` helper and a pre-copy comparison to catch mutation (Req 16.3).
-- **Validation reports** carry up to 100 violations plus a total count. The wrapper code is `INVALID_DECK` (or `INVALID_PROFILE` for a profile), and each violation has its own stable code and path.
+- **Validation reports** carry up to 100 violations plus a total count. The wrapper code for a Deck is `INVALID_DECK`. A profile failure returns the specific code of its first violation at the top level, with the report attached; `INVALID_PROFILE` is used only for violations with no more specific code (Req 2.13). Each violation has its own stable code and path. `createSession`, `exportDeckJson`, `deriveDamagedDeck` and `compareCells` return `Result<T, ReportedError>` so the `INVALID_DECK` report reaches the caller (Req 12.9).
 - **Resource limits** are checked before expensive work: JSON size before parse, session action count before replay, Deck size before per-cell validation, fabric size before building rows.
 - **Stable messages.** `ERROR_MESSAGES[code]` holds a fixed text per code. A message may append names or numbers (for example supplied and supported versions) after the fixed prefix. The UI may reuse them.
 - **Unverified status is data, not an error.** It is exposed and never blocks an operation.
@@ -1088,11 +1212,41 @@ Each property is a single `fc.assert(fc.property(...), { seed, numRuns })`. Seed
 | Profile | `INVALID_PROFILE`, `PROFILE_COUNT_MISMATCH`, `HOOK_MAPPING_INVALID`, `PHYSICAL_DIMENSIONS_UNAVAILABLE` |
 | Positions and indices | `POSITION_OUT_OF_RANGE`, `RESERVED_POSITION`, `READ_INDEX_OUT_OF_RANGE` |
 | Cells, evidence, edits | `OBSERVED_WITHOUT_OBSERVATION`, `PROBABILITY_OUT_OF_RANGE`, `INVALID_PROVENANCE`, `INFERENCE_CANNOT_BE_OBSERVED`, `EDIT_NOTE_REQUIRED`, `EVIDENCE_REQUIRED`, `EVIDENCE_TOO_LONG`, `DUPLICATE_ACTION_ID`, `NOTHING_TO_UNDO`, `NOTHING_TO_WITHDRAW`, `INVALID_EDIT`, `INVALID_EDIT_HISTORY`, `UNKNOWN_CARD` |
-| Deck and approval | `UNRESOLVED_CELLS`, `UNRESOLVED_CELL`, `INVALID_DECK`, `DECK_SIZE_OUT_OF_RANGE`, `DUPLICATE_CARD_ID`, `CELL_COUNT_MISMATCH`, `INVALID_REORDER` |
+| Deck and approval | `UNRESOLVED_CELLS`, `UNRESOLVED_CELL`, `INVALID_DECK`, `DECK_SIZE_OUT_OF_RANGE`, `DUPLICATE_CARD_ID`, `CELL_COUNT_MISMATCH`, `INVALID_REORDER`, `DECK_SHAPE_MISMATCH`, `CARD_INDEX_OUT_OF_RANGE`, `INVALID_APPROVAL_HISTORY` |
 | Loom configuration and run | `INVALID_THREADS_PER_HOOK`, `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`, `HOOK_MAPPING_NOT_CONFIGURED`, `UNSUPPORTED_HOOK_MAPPING`, `DECK_NOT_APPROVED`, `FABRIC_TOO_LARGE`, `COLOUR_LAYER_OUT_OF_RANGE`, `INVALID_COLOUR_LAYER` |
 | Simulation | `ALREADY_COMPLETE`, `PAUSED`, `SEEK_OUT_OF_RANGE` |
 | Bitmap and export | `BITMAP_WIDTH_UNSUPPORTED`, `BITMAP_HEIGHT_UNSUPPORTED`, `BITMAP_NOT_BINARY`, `INVALID_EXPORT_OPTIONS` |
 | Session | `SESSION_DIGEST_MISMATCH`, `SESSION_TRUNCATED`, `SESSION_SEQUENCE_INVALID`, `SESSION_TOO_LARGE`, `SESSION_ACTION_INVALID`, `SESSION_ACTION_FAILED` |
+
+The G1 review resolutions add `DECK_SHAPE_MISMATCH` (two Decks with different profile identifiers or `cardId` lists, from `compareCells`), `CARD_INDEX_OUT_OF_RANGE` (a card index or `insertCard` position outside the Deck) and `INVALID_APPROVAL_HISTORY` (empty approvals or approval sequences not contiguous from 1). They are pre-freeze additions; `docs/domain-errors.md`, the registry-sync test and one example test per code (Req 16.4, 16.5) cover them.
+
+**Error codes per function (design statement of Req 12.1; every list is in check order where order matters).** Brand constructors: see "Branded coordinate types".
+
+| Function | Codes |
+|----------|-------|
+| `validateProfile`, `compileProfile` | the first violation's specific code (`PROFILE_COUNT_MISMATCH`, `HOOK_MAPPING_INVALID`, `INVALID_PROFILE`), with report |
+| `gridToReadIndex` | `POSITION_OUT_OF_RANGE`, `RESERVED_POSITION` |
+| `readIndexToGrid` | `READ_INDEX_OUT_OF_RANGE` |
+| `gridToPhysical` | `PHYSICAL_DIMENSIONS_UNAVAILABLE`, `POSITION_OUT_OF_RANGE` |
+| `createCard` | `CELL_COUNT_MISMATCH`, `INVALID_PROVENANCE`, `OBSERVED_WITHOUT_OBSERVATION`, `PROBABILITY_OUT_OF_RANGE`, `EVIDENCE_TOO_LONG` |
+| `userEdit` | `UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE`, `DUPLICATE_ACTION_ID`, `EDIT_NOTE_REQUIRED`, `EVIDENCE_TOO_LONG` |
+| `undoEdit` | `UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE`, `DUPLICATE_ACTION_ID`, `NOTHING_TO_UNDO` |
+| `setInferred` | `UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE`, `DUPLICATE_ACTION_ID`, `INFERENCE_CANNOT_BE_OBSERVED` / `INVALID_PROVENANCE` (inputs are disjoint, so their order is immaterial), `EVIDENCE_REQUIRED`, `EVIDENCE_TOO_LONG`, `PROBABILITY_OUT_OF_RANGE`, `INVALID_EDIT` |
+| `withdrawInference` | `UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE`, `DUPLICATE_ACTION_ID`, `INVALID_EDIT`, `NOTHING_TO_WITHDRAW` (Req 5.28) |
+| `createDeck`, `reorderCards`, `insertCard`, `removeCard`, `duplicateCard`, `requestApproval`, `revokeApproval` | orders in "Deck operations, edits and approval" |
+| `getCell`, `decodeCard` | `UNKNOWN_CARD` / `CARD_INDEX_OUT_OF_RANGE` (`decodeCard` by card index), `READ_INDEX_OUT_OF_RANGE`, `UNRESOLVED_CELL` |
+| `warpCount`, `hookWarpIndices` | `INVALID_THREADS_PER_HOOK`, `HOOK_MAPPING_NOT_CONFIGURED`, `UNSUPPORTED_HOOK_MAPPING`, `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`, then `READ_INDEX_OUT_OF_RANGE` (`hookWarpIndices` only) |
+| `passResult`, `fabricCoordinate` | see "Interpreter and fabric" (`POSITION_OUT_OF_RANGE` for a thread offset, `SEEK_OUT_OF_RANGE` for a pass index) |
+| `makeLoomConfig`, `validateLoomConfig`, `create` | `INVALID_FORMAT` (shape or `profileId` mismatch, `validateLoomConfig` and `create` only), `INVALID_THREADS_PER_HOOK`, `HOOK_MAPPING_NOT_CONFIGURED`, `UNSUPPORTED_HOOK_MAPPING`, `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`, then for `create` the interpreter order |
+| `exportDeckJson` | `INVALID_DECK` (with report), `INVALID_COLOUR_LAYER`, `INVALID_FORMAT` |
+| `importDeckJson` | order in "JSON serialization" |
+| `createSession` | `INVALID_DECK` (with report), the `validateLoomConfig` codes |
+| `appendAction` | `DUPLICATE_ACTION_ID`, `SESSION_TOO_LARGE`, then the action's own code |
+| `exportSessionLog` | `SESSION_TRUNCATED`, `SESSION_TOO_LARGE`, `INPUT_TOO_LARGE` |
+| `bitmapToDeck` | `BITMAP_WIDTH_UNSUPPORTED`, `BITMAP_HEIGHT_UNSUPPORTED`, `BITMAP_NOT_BINARY` (an empty bitmap reports height first) |
+| `exportCardSvg`, `exportDeckSvg` | `INVALID_EXPORT_OPTIONS`, `INVALID_FORMAT` (profile id), `PHYSICAL_DIMENSIONS_UNAVAILABLE`, `UNKNOWN_CARD` |
+| `compareCells` | `INVALID_DECK`, `DECK_SHAPE_MISMATCH` |
+| `deriveDamagedDeck` | `INVALID_DECK`, then the `createCard` codes |
 
 Adding a code is a minor-version change. Removing or repurposing one needs a spec update. `NOTHING_TO_WITHDRAW` is added by the withdrawal amendment (Req 5.28, 16.1): `docs/domain-errors.md` must list it with its meaning (the cell has no Live_Entry, or its latest Live_Entry is not an `inference` entry), and the registry-sync test (Req 16.4) fails until both agree. An example test triggers it (Req 16.5).
 
@@ -1136,7 +1290,8 @@ PBT applies: the library is pure functions, serializers, parsers and algorithms.
 - Replay: a log with an edit followed by `sim-create` replays to a state that differs from `create` of the initial Deck; a log with one flipped digest returns `SESSION_DIGEST_MISMATCH` naming that action.
 - Migration: a synthetic version-0 fixture with an injected migration records `meta.migrations`.
 - Compile-time test: `// @ts-expect-error` shows a `ReadIndex` is not accepted as a `GridRow`.
-- Import-boundary test (Req 1.5, 1.6), forbidden-wording scan (Req 11.5), exported-surface snapshot against a committed list (Req 12.1, 12.6), error registry versus `docs/domain-errors.md` sync (Req 16.4), constants `SIMULATION_DISCLAIMER` and `SVG_CAVEAT` equal the required text, `INTERFACE_VERSION` present.
+- G1 review examples: `setInferred` with `ambiguous` plus a value, and with `repeat-inferred` and no value, returns `INVALID_PROVENANCE`; `insertCard` and `duplicateCard` of a card with history return `INVALID_EDIT_HISTORY`, and with an out-of-range `at` return `CARD_INDEX_OUT_OF_RANGE`; `decodeCard` with a bad index returns `CARD_INDEX_OUT_OF_RANGE`; `compareCells` of Decks with different profile ids or card ids returns `DECK_SHAPE_MISMATCH`; `createSession`, `exportDeckJson`, `deriveDamagedDeck` and `compareCells` of an invalid Deck return `INVALID_DECK` with a readable `report`; a `createCard` seed with `repeat-inferred` provenance returns `INVALID_PROVENANCE`; `bitmapToDeck([])` returns `BITMAP_HEIGHT_UNSUPPORTED`; `exportCardSvg` with a different `o.profile.profileId` returns `INVALID_FORMAT`; `asReadIndex(1.5)`, `asPassIndex(2.5)` and `asWarpIndex(1.5)` return `READ_INDEX_OUT_OF_RANGE`, `SEEK_OUT_OF_RANGE` and `POSITION_OUT_OF_RANGE`; `gridToPhysical` with no dimensions and an out-of-range position returns `PHYSICAL_DIMENSIONS_UNAVAILABLE`; `validateProfile` of a count mismatch returns `PROFILE_COUNT_MISMATCH` at the top level with a report; approvals with a sequence gap return `INVALID_APPROVAL_HISTORY`; exported canonical text ends with exactly one `\n`; `index.ts` exports neither `writeCanonicalJson` nor `SchemaNode`.
+- Import-boundary test (Req 1.5, 1.6), forbidden-wording scan (Req 11.5), exported-surface snapshot of declaration text against a committed file (Req 12.1, 12.6, 12.12), error registry versus `docs/domain-errors.md` sync (Req 16.4), constants `SIMULATION_DISCLAIMER` and `SVG_CAVEAT` equal the required text, `INTERFACE_VERSION` present.
 - Benchmark hook: `deriveDamagedDeck` with a test-owned damage function and seeded RNG gives a Deck that validates, is `unapproved`, and leaves the truth Deck deeply equal to its copy; `compareCells` of a Deck with itself has zero mismatches.
 
 ### Golden tests (Req 13.14)
@@ -1300,3 +1455,41 @@ Only genuinely open items remain. The earlier questions on the fabric cap, undo 
 | 17.7 | Null-rejection example; golden Deck JSON with `null` |
 | 17.8 | Withdrawal restores only the Previous_Fields value, other cells unchanged; P23, P25 |
 | Dependencies for later specs | "Dependencies for later specs" section; vision row of the contracts table |
+| 2.13 | `validateProfile` specific top-level code; "Machine profile" verification rules |
+| 3.7, 4.11 | Branded constructor code table; `fabricCoordinate` order |
+| 4.10 | `gridToPhysical` origin, axes and order; "Coordinate systems and conversions" |
+| 5.34, 5.35 | `setInferred` value rules; policy-only `ambiguous` with value |
+| 6.13, 6.14, 6.15 | Structure operation orders; validator code assignments |
+| 7.16, 7.17 | Single top-level `schemaVersion`, trailing newline, internal writer; "JSON serialization" |
+| 10.10 | `bitmapToDeck` empty bitmap |
+| 11.11 | SVG profile rule |
+| 12.9 to 12.12 | `ReportedError` returns, `CellSeed`, `decodeCard`, surface guard declaration text; error-codes-per-function table |
+| 13.26 | Seed and generator register, auxiliary seeds |
+| 14.13 | `HookMappingConfig`, `warpCount`, `hookWarpIndices` as `Result`; P4 |
+| 15.23 | Session `initialDeck` key set, digest form with `deckDigest` |
+
+## Amendment record
+
+### G1 review resolutions (interface version stays 1.1.0)
+
+Source: `docs/reviews/2026-11-26-g1-domain-interface.md` and the matching "G1 review resolutions" record in `requirements.md`. These are pre-freeze corrections: the interface was not yet frozen, so `INTERFACE_VERSION` remains `"1.1.0"` and Req 12.6 is not triggered. Numbering is unchanged.
+
+| Review item | Design change |
+|----|----|
+| B-1 | `HookMappingConfig`; `warpCount` and `hookWarpIndices` return `Result` with the codes and order in "Hook-to-warp mappings". An absent `hookMapping` gives `HOOK_MAPPING_NOT_CONFIGURED` and an absent `mirror` gives `MIRROR_NOT_CONFIGURED` in both functions, with no implicit default; P4 and the `fabricCoordinate` consistency clause updated |
+| B-2 | `createSession`, `exportDeckJson`, `deriveDamagedDeck`, `compareCells` return `Result<T, ReportedError>`; `DECK_SHAPE_MISMATCH` |
+| S-1 | `setInferred` value rules; `ambiguous` with a value only via `requestApproval` policy |
+| S-2 | `insertCard` and `duplicateCard` reject cards with history (`INVALID_EDIT_HISTORY`); `CARD_INDEX_OUT_OF_RANGE` for the insert position and `decodeCard` |
+| S-3 | `CellSeed.initial: Omit<CellInitial, "restorationConfidence">`; seed provenance `observed` or `ambiguous` only |
+| S-4 | `initialDeck` carries `schemaVersion` on the Deck and each Card; the deck file has one top-level `schemaVersion`; digest form uses `deckDigest` |
+| S-5 | Canonical writer and `SchemaNode` internal; canonical text ends with one `\n`; later-spec dependency list uses `exportDeckJson`, `exportSessionLog`, `stateDigest` |
+| S-6 | Worker-defined types documented: `SessionLogContext`, `SessionPayload` and payload types, `CompiledProfile`, `CompiledGridPosition` (encoding), `HookMappingConfig`, `validateLoomConfig`, `migrateToCurrent`, `MigrationOutcome`, `ok`, `err`, `makeError` |
+| S-7 | `gridToPhysical` origin, axes, check order |
+| S-8 | Error codes per function table; empty bitmap; SVG profile rule |
+| S-9 | Validator code assignments; `INVALID_APPROVAL_HISTORY` |
+| S-10 | `validateProfile` returns the specific first code with report |
+| N-1 | Brand constructor code table; warp index and thread offset use `POSITION_OUT_OF_RANGE` |
+| N-4 | Seed register: shared seed for multi-assert properties, auxiliary seeds 20260190 to 20260199 |
+| N-5 | Surface guard records declaration text |
+
+Not amended here: N-2 (error documentation on exports, a task matter), N-3 (covered by the `validateLoomConfig` statement), N-6 (documentation files, later tasks), N-7 (`GARIN_PROFILE` deep-freeze is stated in "Machine profile").

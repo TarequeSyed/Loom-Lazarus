@@ -18,8 +18,11 @@ export const SVG_CAVEAT =
   "Not validated for physical laser cutting or any physical loom. Dimensions are unverified unless marked verified in the Machine_Profile.";
 
 /**
- * Export one card. Errors, in check order: `INVALID_EXPORT_OPTIONS` (scale not a positive finite number, or unit not
- * `px` or `mm`), `PHYSICAL_DIMENSIONS_UNAVAILABLE` (`mm` without `profile.physicalDimensions`), `UNKNOWN_CARD`
+ * Export one card. Uses `deck.profile`; `o.profile` must have the same `profileId` (Req 11.11).
+ *
+ * Errors, in check order: `INVALID_EXPORT_OPTIONS` (scale not a positive finite number, or unit not
+ * `px` or `mm`), `INVALID_FORMAT` (`o.profile.profileId` differs from `deck.profile.profileId`),
+ * `PHYSICAL_DIMENSIONS_UNAVAILABLE` (`mm` without `profile.physicalDimensions`), `UNKNOWN_CARD`
  * (the card is not in the deck).
  */
 export function exportCardSvg(card: Card, deck: Deck, o: SvgExportOptions): Result<string> {
@@ -30,8 +33,8 @@ export function exportCardSvg(card: Card, deck: Deck, o: SvgExportOptions): Resu
 }
 
 /**
- * Export every card of a deck. Errors, in check order: `INVALID_EXPORT_OPTIONS`,
- * `PHYSICAL_DIMENSIONS_UNAVAILABLE`.
+ * Export every card of a deck. Follows the same profile rule as `exportCardSvg`. Errors, in check order:
+ * `INVALID_EXPORT_OPTIONS`, `INVALID_FORMAT` (profile id), `PHYSICAL_DIMENSIONS_UNAVAILABLE`.
  */
 export function exportDeckSvg(deck: Deck, o: SvgExportOptions): Result<string> {
   void deck;

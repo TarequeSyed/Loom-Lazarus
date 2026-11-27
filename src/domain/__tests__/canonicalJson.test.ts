@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { writeCanonicalJson } from "../io/canonicalJson";
+import { SEED_AUX_CANONICAL } from "./seeds";
 import {
   CELL_NODE,
   DECK_FILE_NODE,
@@ -28,7 +29,7 @@ function write(value: unknown, node = CELL_NODE) {
 }
 
 describe("canonical JSON writer", () => {
-  it("uses schema key order, two-space indent and \\n, omitting absent optionals", () => {
+  it("uses schema key order, two-space indent and \\n with one trailing newline, omitting absent optionals", () => {
     const result = write({
       history: [],
       initial: { evidence: { text: "t", refs: [] }, provenance: "ambiguous", restorationConfidence: null },
@@ -49,7 +50,7 @@ describe("canonical JSON writer", () => {
         "  },",
         '  "history": []',
         "}",
-      ].join("\n"),
+      ].join("\n") + "\n",
     });
   });
 
@@ -76,9 +77,11 @@ describe("canonical JSON writer", () => {
         const second = write(structuredClone(cell(confidence)));
         expect(first).toEqual(second);
         const text = first.ok ? first.value : "";
+        expect(text.endsWith("}\n")).toBe(true);
+        expect(text.endsWith("\n\n")).toBe(false);
         expect(text.includes('"restorationConfidence": null')).toBe(confidence === null);
       }),
-      { seed: 4101, numRuns: 100 },
+      { seed: SEED_AUX_CANONICAL, numRuns: 100 },
     );
   });
 

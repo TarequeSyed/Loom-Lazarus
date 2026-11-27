@@ -26,12 +26,15 @@ export interface CellSeed {
  * Every created cell has `restorationConfidence: null` (not evaluated). It is never `0`, never
  * undefined, and never a number: only `setInferred` assigns a numeric value.
  *
- * Errors (first failure returned):
+ * Seed provenance is `observed` or `ambiguous` only (Req 12.10).
+ *
+ * Errors (first failure returned, in check order; no order requirement beyond this list):
  * - `CELL_COUNT_MISMATCH`: `observations.length !== profile.readableCount`.
+ * - `INVALID_PROVENANCE`: a seed's initial provenance is not `observed` or `ambiguous`
+ *   (`repeat-inferred`, `symmetry-inferred` and `user-edited` are rejected).
  * - `OBSERVED_WITHOUT_OBSERVATION`: a seed asks for `observed` without `raw.value`.
  * - `PROBABILITY_OUT_OF_RANGE`: `raw.holeLikelihood` present but not a finite number in [0, 1].
  * - `EVIDENCE_TOO_LONG`: a seed's evidence text exceeds 1,000 characters.
- * - `INVALID_PROVENANCE`: a seed's initial provenance is not one of the allowed values.
  */
 export function createCard(
   profile: MachineProfile,

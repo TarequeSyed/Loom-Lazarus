@@ -19,12 +19,13 @@ export interface ImportedDeck {
  * Write a Deck as canonical JSON (stable key order, two-space indent, `\n`, no timestamps). `restorationConfidence`
  * is always written and `null` is written as `null`, distinct from `0`. Equal Decks give byte-identical text.
  *
- * Errors: `INVALID_DECK` (the deck fails validation), `INVALID_COLOUR_LAYER`, `INVALID_FORMAT` (non-finite number).
+ * Errors, in check order: `INVALID_DECK` (the deck fails `validateDeck`; the report is in the error, Req 12.9),
+ * `INVALID_COLOUR_LAYER`, `INVALID_FORMAT` (colour layer of another shape, or a non-finite number).
  */
 export function exportDeckJson(
   deck: Deck,
   extras?: { weftColourLayer?: WeftColourLayer },
-): Result<string> {
+): Result<string, ReportedError> {
   void deck;
   void extras;
   return notImplemented("exportDeckJson");

@@ -71,13 +71,16 @@ export function readIndexToGrid(p: MachineProfile, i: number): Result<GridPositi
 
 /**
  * Grid position to physical location, using only the profile's declared physical dimensions.
- * The origin is the declared (originXMm, originYMm) for position (0, 0); x grows with `gridColumn`
+ * The origin is the centre of grid position (0, 0), declared as (originXMm, originYMm); x grows with `gridColumn`
  * by `columnPitchMm` and y grows with `gridRow` by `rowPitchMm`.
  * Never estimates a location from grid coordinates alone.
- * Errors: `POSITION_OUT_OF_RANGE` (checked first), `PHYSICAL_DIMENSIONS_UNAVAILABLE`.
+ * y grows with `gridRow` (row 0 at the top as drawn; UNVERIFIED A3).
+ * Errors, in check order: `PHYSICAL_DIMENSIONS_UNAVAILABLE`, then `POSITION_OUT_OF_RANGE`.
  * Reserved positions are allowed: they are real places on the card.
  */
 export function gridToPhysical(p: MachineProfile, pos: GridPosition): Result<PhysicalLocation> {
+  const d = p.physicalDimensions;
+  if (d === undefined) return err(makeError("PHYSICAL_DIMENSIONS_UNAVAILABLE"));
   const gridRow: unknown = pos.gridRow;
   const gridColumn: unknown = pos.gridColumn;
   if (!isIntegerIn(gridRow, p.gridRows) || !isIntegerIn(gridColumn, p.gridColumns)) {
@@ -87,10 +90,7 @@ export function gridToPhysical(p: MachineProfile, pos: GridPosition): Result<Phy
         `Position (${String(gridRow)}, ${String(gridColumn)}) is outside the ${p.gridRows} x ${p.gridColumns} grid.`,
       ),
     );
-  }
-  const d = p.physicalDimensions;
-  if (d === undefined) return err(makeError("PHYSICAL_DIMENSIONS_UNAVAILABLE"));
-  return ok({
+  }  return ok({
     xMm: (d.originXMm + gridColumn * d.columnPitchMm) as Millimetres,
     yMm: (d.originYMm + gridRow * d.rowPitchMm) as Millimetres,
   });

@@ -102,6 +102,7 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 10. WHEN the Reserved_Positions of a Machine_Profile are replaced with a different valid list in the profile data, THE Card_Domain_Library SHALL recompute the read-order tables, the readable count and every dependent conversion without any change to library code.
 11. IF a Machine_Profile marks a field `verified` without a non-empty source citation, THEN THE Deck_Validator SHALL return error `INVALID_PROFILE` naming the field.
 12. IF a Machine_Profile fails validation for a reason other than a count mismatch, THEN THE Deck_Validator SHALL return error `INVALID_PROFILE` with a path to the offending field.
+13. WHEN a Machine_Profile fails validation, THE Deck_Validator SHALL return the specific error code of the first violation at the top level (for example `PROFILE_COUNT_MISMATCH` or `HOOK_MAPPING_INVALID`) with the full violation report attached, and SHALL use `INVALID_PROFILE` only for violations that have no more specific code.
 
 ### Requirement 3: Grid, reserved and readable positions
 
@@ -115,6 +116,7 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 4. IF a caller addresses a Grid_Position outside the grid, THEN THE Card_Domain_Library SHALL return error `POSITION_OUT_OF_RANGE` and leave the Card unchanged.
 5. IF a caller attempts to set an instruction value on a Reserved_Position, THEN THE Card_Domain_Library SHALL return error `RESERVED_POSITION` and leave the Card unchanged.
 6. THE Card_Domain_Library SHALL name variables and parameters by coordinate system (`gridRow`, `gridColumn`, `readIndex`, `warpIndex`, `passIndex`) and SHALL NOT accept one system's number where another is expected, as enforced by distinct TypeScript types.
+7. THE Card_Domain_Library SHALL define error code `POSITION_OUT_OF_RANGE` as a grid or fabric position out of range, and SHALL return it for a non-integer or out-of-range `gridRow`, `gridColumn` or `warpIndex`, and for a thread offset outside [0, `threadsPerHook`).
 
 ### Requirement 4: Coordinate and read-order mappings
 
@@ -131,6 +133,8 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 7. THE Card_Domain_Library SHALL provide conversions from (Read_Index, thread offset, `passIndex`, Loom_Configuration) to Fabric_Coordinates, applying the selected Hook_Mapping, threads-per-hook and mirror settings.
 8. THE Card_Domain_Library SHALL document the read order implemented for the Garín_Profile (column-by-column, bottom-up, starting at the rightmost column, per `jacquard-card-format.md`) and SHALL cite assumption A4 as unverified.
 9. FOR ALL Machine_Profiles that pass validation, converting a Read_Index to a Grid_Position and back SHALL return the original Read_Index, and converting a Readable_Position to a Read_Index and back SHALL return the original Grid_Position (bijection).
+10. THE Grid_Position to Physical_Location conversion SHALL use only declared physical dimensions, SHALL take the origin as the centre of grid position (0,0), SHALL increase x with `gridColumn` and y with `gridRow` (row 0 at top as drawn, unverified assumption A3), and SHALL check preconditions in this order: `PHYSICAL_DIMENSIONS_UNAVAILABLE`, then `POSITION_OUT_OF_RANGE`.
+11. IF a Read_Index supplied to a conversion is not an integer, THEN THE Card_Domain_Library SHALL return `READ_INDEX_OUT_OF_RANGE`, and IF a `passIndex` supplied to a conversion or seek is not an integer, THEN THE Card_Domain_Library SHALL return `SEEK_OUT_OF_RANGE`.
 
 ### Requirement 5: Cell values, provenance, evidence, history, undo and approval
 
@@ -172,6 +176,8 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 31. WHEN `withdrawInference` succeeds on a Deck whose current Approval_State is `approved`, THE Card_Domain_Library SHALL append an Approval_Record with Approval_State `unapproved`, cause `withdrawal`, the same Action_Id and a new Sequence_Number, including when the withdrawn inference is the value an earlier approval covered, and WHEN the current Approval_State is `unapproved`, THE Card_Domain_Library SHALL append no Approval_Record.
 32. WHEN the latest entry of a Cell's Edit_History is a Withdrawal_Entry, THE Card_Domain_Library SHALL return `NOTHING_TO_UNDO` from the undo function and leave the Deck unchanged, and a user edit applied after a Withdrawal_Entry SHALL record the post-withdrawal Effective_Value and Provenance as its earlier values.
 33. WHEN the inference function of criterion 17 is applied to a Cell after a Withdrawal_Entry and no un-reversed user edit protects the Cell, THE Card_Domain_Library SHALL accept the inference as for any other Cell, and THE Card_Domain_Library SHALL provide no operation that reverses a Withdrawal_Entry (a new inference is the way to set a value again).
+34. IF the inference function of criterion 17 is called with Provenance `repeat-inferred` or `symmetry-inferred` and no value, or with Provenance `ambiguous` and a value, THEN THE Card_Domain_Library SHALL return `INVALID_PROVENANCE` and leave the Deck unchanged.
+35. THE Card_Domain_Library SHALL write an `ambiguous` entry that carries an Effective_Value only through `requestApproval` with the explicit `ambiguous`-as-`down` policy of criterion 22, with the policy note recorded in the entry.
 
 ### Requirement 6: Deck structure and validation
 
@@ -191,6 +197,9 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 10. IF an approved Deck contains a Cell without Effective_Value, THEN THE Deck_Validator SHALL report error `UNRESOLVED_CELL` with the Card identifier and Read_Index.
 11. IF a Withdrawal_Entry references an Action_Id that is not an earlier `inference` entry of the same Cell, or an `inference` entry already referenced by another Withdrawal_Entry, THEN THE Deck_Validator SHALL report error `INVALID_EDIT_HISTORY` with the path of the Withdrawal_Entry.
 12. THE Deck_Validator SHALL apply the Action_Id uniqueness and Sequence_Number consistency rules of criterion 5 to Withdrawal_Entries, and SHALL check that each Withdrawal_Entry's restored fields equal the Previous_Fields of the inference entry it references.
+13. IF a Card supplied to `insertCard` or `duplicateCard` has any Cell with a non-empty Edit_History, THEN THE Card_Domain_Library SHALL return `INVALID_EDIT_HISTORY` and leave the Deck unchanged, because copying history would break deck-wide uniqueness of Action_Ids and Sequence_Numbers (criterion 5). A Card with no history SHALL be inserted or duplicated with every field kept.
+14. IF the position supplied to `insertCard` is not an integer in [0, card count], THEN THE Card_Domain_Library SHALL return `CARD_INDEX_OUT_OF_RANGE` and leave the Deck unchanged.
+15. THE Deck_Validator SHALL return `INVALID_APPROVAL_HISTORY` for an empty Approval_Record list or Approval_Record Sequence_Numbers not contiguous from 1, `DUPLICATE_ACTION_ID` for a duplicate Action_Id anywhere in the Deck, `INVALID_EDIT_HISTORY` for an inconsistent Edit_History Sequence_Number, and the Machine_Profile's own codes (including `HOOK_MAPPING_INVALID`) for profile violations inside a Deck.
 
 ### Requirement 7: Deck JSON export and import
 
@@ -213,6 +222,8 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 13. IF an imported Cell lacks the Restoration_Confidence field, THEN THE Deck_Serializer SHALL return the Deck_Validator violations including error `MISSING_REQUIRED_FIELD` with the path of the Cell, and SHALL NOT default the field to `null` or `0`.
 14. THE Deck_Serializer SHALL export and import `inference` entries (including Previous_Fields) and Withdrawal_Entries (including the referenced Action_Id and the restored fields) with a stable key order and no loss, and SHALL keep a restored Restoration_Confidence of `null` distinct from `0`.
 15. FOR ALL valid Decks whose Edit_History contains Withdrawal_Entries, exporting, importing and exporting again SHALL produce identical JSON text, and the imported Deck SHALL equal the exported Deck.
+16. THE Deck_Serializer SHALL carry a single top-level `schemaVersion` in the deck file format, and SHALL end canonical JSON text with exactly one trailing newline (`\n`).
+17. THE Card_Domain_Library SHALL keep the canonical JSON writer internal, so that later specs obtain canonical text only through `exportDeckJson`, `exportSessionLog` and `stateDigest`.
 
 ### Requirement 8: Loom interpreter
 
@@ -274,6 +285,7 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 7. THE Bitmap_Converter SHALL accept the bitmap as a plain array of arrays of numbers and SHALL leave image decoding and thresholding to the caller.
 8. WHEN a Deck generated from a bitmap is approved and rendered with threads-per-hook 1, mirror `none` and either Hook_Mapping, THE Interpreter SHALL produce a Fabric_Buffer whose lifted cells equal the bitmap 1 values, row for row.
 9. IF the profile `readableCount` is greater than 2,048, THEN THE Bitmap_Converter SHALL return error `BITMAP_WIDTH_UNSUPPORTED`.
+10. IF the bitmap is empty, THEN THE Bitmap_Converter SHALL return `BITMAP_HEIGHT_UNSUPPORTED`.
 
 ### Requirement 11: SVG export
 
@@ -291,6 +303,7 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 8. THE SVG_Exporter SHALL produce byte-identical SVG text for equal inputs.
 9. THE Card_Domain_Library SHALL provide a documentation file under `docs` that repeats the criterion 6 caveat, and SHALL provide the caveat text as an exported constant for UI reuse.
 10. WHERE the Machine_Profile marks the Reserved_Positions as Geometric_Inference, THE SVG_Exporter SHALL label the reserved elements as "inferred location" in the SVG.
+11. THE SVG_Exporter SHALL use the Deck's Machine_Profile for Card export, and IF the export options carry a Machine_Profile with a different `profileId`, THEN THE SVG_Exporter SHALL return `INVALID_FORMAT`.
 
 ### Requirement 12: Stable interfaces for later specs
 
@@ -306,6 +319,10 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 6. THE Card_Domain_Library SHALL treat a change to any exported signature after design approval as requiring a spec update, and SHALL record the interface version in an exported constant.
 7. THE Card_Domain_Library SHALL provide a documented list of all error codes, each stable across minor versions.
 8. THE Card_Domain_Library SHALL document the Restoration_Confidence as algorithmic and uncalibrated, with `null` meaning not evaluated, and SHALL carry a deck-level calibration marker with value `uncalibrated` unless a caller supplies a benchmark reference.
+9. THE functions `createSession`, `exportDeckJson`, `deriveDamagedDeck` and `compareCells` SHALL return `INVALID_DECK` in the `ReportedError` form, carrying the violation report, and `compareCells` SHALL return `DECK_SHAPE_MISMATCH` for two Decks with different profile identifiers or different `cardId` lists.
+10. THE `CellSeed.initial` type SHALL have no `restorationConfidence` field, `createCard` SHALL always write `null`, seeds SHALL carry Provenance `observed` or `ambiguous` only, and a seed with `repeat-inferred`, `symmetry-inferred` or `user-edited` SHALL return `INVALID_PROVENANCE`.
+11. THE Card_Domain_Library SHALL return `CARD_INDEX_OUT_OF_RANGE` from `decodeCard` for a Card index outside the Deck.
+12. THE exported-surface guard test SHALL record declaration text (parameter and return types), not only export names, so that a changed signature fails the guard.
 
 ### Requirement 13: Correctness properties and test determinism
 
@@ -338,6 +355,7 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 23. THE Card_Domain_Library test suite SHALL include example tests that a second `withdrawInference` on the same single inference returns `NOTHING_TO_WITHDRAW`, that withdrawal beneath an un-reversed user edit returns `INVALID_EDIT`, that withdrawal after the user edit was undone succeeds, that `UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE` and `DUPLICATE_ACTION_ID` are returned in the order of Requirement 5, criterion 28, and that an approved Deck becomes `unapproved` with cause `withdrawal` after a withdrawal.
 24. THE Card_Domain_Library test suite SHALL include a property that, FOR ALL valid Decks whose history contains Withdrawal_Entries, export, import and export again yields identical JSON text, and a replay property that Session_Logs containing `withdraw-inference` actions replay twice to byte-identical canonical JSON with State_Digests equal to those recorded, each with an explicit seed and a stated generator precondition.
 25. THE Card_Domain_Library test suite SHALL include validator tests, with explicit seeds for generated cases, that a Withdrawal_Entry referencing a missing Action_Id, a `user-edit` entry, an inference of another Cell, a later entry, or an already-withdrawn inference returns `INVALID_EDIT_HISTORY`, and that a duplicate Action_Id or a non-consistent Sequence_Number on a Withdrawal_Entry is reported.
+26. A correctness property of this suite MAY consist of several `fc.assert` calls that share the property's seed constant, and non-property tests (generator self-checks and auxiliary writer properties) SHALL use named auxiliary seeds 20260190 to 20260199 recorded in the test seed register.
 
 ### Requirement 14: Hook-to-warp mappings
 
@@ -357,6 +375,7 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 10. THE Card_Domain_Library SHALL document the following consequences for the Garín_Profile and the Limits, using the fabric cap of 4,000,000 cells: threads-per-hook 16 gives 6,400 warp threads and at most 625 passes; threads-per-hook 10 gives 4,000 warp threads and at most 1,000 passes; threads-per-hook 64 gives 25,600 warp threads and at most 156 passes; threads-per-hook 1 gives 400 warp threads and at most 10,000 passes, which equals the maximum Deck size; and that these numbers are identical for both Hook_Mappings and differ only in which warp threads each hook drives.
 11. WHEN a Deck with more passes than the cap allows for the selected threads-per-hook is run, THE Interpreter SHALL return error `FABRIC_TOO_LARGE` stating the warp count, the pass count and the cap.
 12. THE Card_Domain_Library SHALL keep default threads-per-hook at 16 in the Garín_Profile and SHALL mark it `unverified` per assumption A5.
+13. THE functions `warpCount` and `hookWarpIndices` SHALL return Result values and SHALL NOT throw for expected failures. IF the mapping kind is unknown or not among the profile's `hookMappings`, THEN they SHALL return `UNSUPPORTED_HOOK_MAPPING`, and IF the mirror option is not among the profile's `mirrorOptions`, THEN they SHALL return `UNSUPPORTED_MIRROR`. `HOOK_MAPPING_INVALID` SHALL remain reserved for bad profile data (criterion 5).
 
 ### Requirement 15: Session log and deterministic replay
 
@@ -386,6 +405,7 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 20. THE Session_Replayer SHALL leave the Session_Log input unmodified.
 21. THE Card_Domain_Library SHALL apply a Session_Action of kind `withdraw-inference` (payload: `cardId`, `readIndex`) by calling `withdrawInference` with the Session_Action's `actionId`, in both the append function of criterion 4 and `replay`, and SHALL include the resulting Withdrawal_Entry and any `withdrawal`-cause Approval_Record in the Session_State and its State_Digest.
 22. IF a `withdraw-inference` Session_Action fails during `replay`, THEN THE Session_Replayer SHALL return `SESSION_ACTION_FAILED` with the path of the action and the underlying error code (`UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE`, `DUPLICATE_ACTION_ID`, `INVALID_EDIT` or `NOTHING_TO_WITHDRAW`).
+23. THE Session_Log SHALL carry its `initialDeck` with `schemaVersion` on the Deck and on each Card, as the Deck and Card types do, and the digest input of a Simulation_State SHALL replace the Deck snapshot with its `deckDigest`.
 
 ### Requirement 16: Stable error registry and corruption boundaries
 
@@ -393,7 +413,7 @@ The library imports nothing from `src/vision`, `src/restore`, `src/benchmark`, `
 
 #### Acceptance Criteria
 
-1. THE Card_Domain_Library SHALL define one `ErrorCode` registry containing at least the following codes: `UNSUPPORTED_SCHEMA_VERSION`, `INVALID_FORMAT`, `INVALID_PROFILE`, `PROFILE_COUNT_MISMATCH`, `POSITION_OUT_OF_RANGE`, `RESERVED_POSITION`, `READ_INDEX_OUT_OF_RANGE`, `PHYSICAL_DIMENSIONS_UNAVAILABLE`, `OBSERVED_WITHOUT_OBSERVATION`, `PROBABILITY_OUT_OF_RANGE`, `INVALID_PROVENANCE`, `INFERENCE_CANNOT_BE_OBSERVED`, `EDIT_NOTE_REQUIRED`, `EVIDENCE_REQUIRED`, `EVIDENCE_TOO_LONG`, `DUPLICATE_ACTION_ID`, `NOTHING_TO_UNDO`, `INVALID_EDIT`, `INVALID_EDIT_HISTORY`, `UNKNOWN_CARD`, `UNRESOLVED_CELLS`, `UNRESOLVED_CELL`, `MISSING_REQUIRED_FIELD`, `INVALID_DECK`, `DECK_SIZE_OUT_OF_RANGE`, `DUPLICATE_CARD_ID`, `CELL_COUNT_MISMATCH`, `INVALID_REORDER`, `INPUT_TOO_LARGE`, `INVALID_JSON`, `UNKNOWN_FIELD`, `INVALID_THREADS_PER_HOOK`, `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`, `HOOK_MAPPING_NOT_CONFIGURED`, `UNSUPPORTED_HOOK_MAPPING`, `HOOK_MAPPING_INVALID`, `DECK_NOT_APPROVED`, `FABRIC_TOO_LARGE`, `COLOUR_LAYER_OUT_OF_RANGE`, `INVALID_COLOUR_LAYER`, `ALREADY_COMPLETE`, `PAUSED`, `SEEK_OUT_OF_RANGE`, `BITMAP_WIDTH_UNSUPPORTED`, `BITMAP_HEIGHT_UNSUPPORTED`, `BITMAP_NOT_BINARY`, `INVALID_EXPORT_OPTIONS`, `SESSION_DIGEST_MISMATCH`, `SESSION_TRUNCATED`, `SESSION_SEQUENCE_INVALID`, `SESSION_TOO_LARGE`, `SESSION_ACTION_INVALID`, `SESSION_ACTION_FAILED`, `NOTHING_TO_WITHDRAW`.
+1. THE Card_Domain_Library SHALL define one `ErrorCode` registry containing at least the following codes: `UNSUPPORTED_SCHEMA_VERSION`, `INVALID_FORMAT`, `INVALID_PROFILE`, `PROFILE_COUNT_MISMATCH`, `POSITION_OUT_OF_RANGE`, `RESERVED_POSITION`, `READ_INDEX_OUT_OF_RANGE`, `PHYSICAL_DIMENSIONS_UNAVAILABLE`, `OBSERVED_WITHOUT_OBSERVATION`, `PROBABILITY_OUT_OF_RANGE`, `INVALID_PROVENANCE`, `INFERENCE_CANNOT_BE_OBSERVED`, `EDIT_NOTE_REQUIRED`, `EVIDENCE_REQUIRED`, `EVIDENCE_TOO_LONG`, `DUPLICATE_ACTION_ID`, `NOTHING_TO_UNDO`, `INVALID_EDIT`, `INVALID_EDIT_HISTORY`, `UNKNOWN_CARD`, `UNRESOLVED_CELLS`, `UNRESOLVED_CELL`, `MISSING_REQUIRED_FIELD`, `INVALID_DECK`, `DECK_SIZE_OUT_OF_RANGE`, `DUPLICATE_CARD_ID`, `CELL_COUNT_MISMATCH`, `INVALID_REORDER`, `INPUT_TOO_LARGE`, `INVALID_JSON`, `UNKNOWN_FIELD`, `INVALID_THREADS_PER_HOOK`, `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`, `HOOK_MAPPING_NOT_CONFIGURED`, `UNSUPPORTED_HOOK_MAPPING`, `HOOK_MAPPING_INVALID`, `DECK_NOT_APPROVED`, `FABRIC_TOO_LARGE`, `COLOUR_LAYER_OUT_OF_RANGE`, `INVALID_COLOUR_LAYER`, `ALREADY_COMPLETE`, `PAUSED`, `SEEK_OUT_OF_RANGE`, `BITMAP_WIDTH_UNSUPPORTED`, `BITMAP_HEIGHT_UNSUPPORTED`, `BITMAP_NOT_BINARY`, `INVALID_EXPORT_OPTIONS`, `SESSION_DIGEST_MISMATCH`, `SESSION_TRUNCATED`, `SESSION_SEQUENCE_INVALID`, `SESSION_TOO_LARGE`, `SESSION_ACTION_INVALID`, `SESSION_ACTION_FAILED`, `NOTHING_TO_WITHDRAW`, `DECK_SHAPE_MISMATCH`, `CARD_INDEX_OUT_OF_RANGE`, `INVALID_APPROVAL_HISTORY`.
 2. THE Card_Domain_Library SHALL give each error code a stable message text and SHALL keep each code's meaning unchanged across minor interface versions.
 3. WHEN a function returns an error, THE Card_Domain_Library SHALL leave every input value unchanged and SHALL return no partial result value.
 4. THE Card_Domain_Library SHALL provide a test that fails when the error registry and `docs/domain-errors.md` differ.
@@ -447,3 +467,28 @@ Consequence of A4, A5 and A11: with 400 hooks and 16 threads per hook, both mapp
 
 - Max Deck size: 10,000 Cards. Max imported Deck JSON size: 8 MiB. Max Session_Log size: 32 MiB. Max Session_Log actions: 100,000. Max fabric size: 4,000,000 cells. Max threads-per-hook: 64. Max bitmap: 10,000 rows. Max evidence text and Edit_Note: 1,000 characters each. Max listed violations: 100, plus a total count.
 - Performance targets are deferred to design, to be measured rather than asserted.
+
+
+## Amendment record
+
+### G1 review resolutions
+
+Source: `docs/reviews/2026-11-26-g1-domain-interface.md`. Numbering is unchanged; new criteria are appended at the end of the requirement named. Each decision was approved by the orchestrator on the user's instruction.
+
+| Review item | Decision | Recorded in |
+|----|----|----|
+| B-1 | `warpCount` and `hookWarpIndices` return Result; unsupported mapping or mirror codes | Req 14.13 |
+| B-2 | `INVALID_DECK` returned with the report; new code `DECK_SHAPE_MISMATCH` | Req 12.9, 16.1 |
+| S-1 | `setInferred` value rules; ambiguous value only via policy approval | Req 5.34, 5.35 |
+| S-2 | Insert or duplicate rejects Cards with history; new code `CARD_INDEX_OUT_OF_RANGE` | Req 6.13, 6.14, 12.11, 16.1 |
+| S-3 | Seeds carry no confidence and only observed or ambiguous provenance | Req 12.10 |
+| S-4 | Embedded deck schemaVersion; simulation digest uses deckDigest | Req 7.16, 15.23 |
+| S-5 | Canonical writer internal; one trailing newline | Req 7.16, 7.17 |
+| S-7 | `gridToPhysical` origin, axes and check order | Req 4.10 |
+| S-8, N-1 | Non-integer inputs use the range codes; `POSITION_OUT_OF_RANGE` definition; empty bitmap; SVG profile | Req 3.7, 4.11, 10.10, 11.11 |
+| S-9 | New code `INVALID_APPROVAL_HISTORY` and validator code assignments | Req 6.15, 16.1 |
+| S-10 | Profile violations return the specific code with report | Req 2.13 |
+| N-4 | Seed rule for multi-assert properties and auxiliary seeds | Req 13.26 |
+| N-5 | Surface guard records declaration text | Req 12.12 |
+
+Not amended (design or later-task matters): S-6, N-2, N-3, N-6, N-7.

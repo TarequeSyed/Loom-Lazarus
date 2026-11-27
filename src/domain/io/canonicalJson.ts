@@ -2,7 +2,7 @@
  * Canonical, schema-ordered JSON writer (design.md, "Deck file schema", Stable output).
  *
  * - Keys are written in the schema's key order, never in object insertion order.
- * - Two-space indent, `\n` line endings, no trailing newline, no timestamps.
+ * - Two-space indent, `\n` line endings, exactly one trailing `\n`, no timestamps.
  * - Numbers must be finite. Absent optional fields are omitted, never written as `null`.
  * - Required nullable numbers (`restorationConfidence`, `confidence`) are always written;
  *   `null` is the literal `null`, distinct from `0`. Nothing is coerced.
@@ -62,5 +62,5 @@ export function writeCanonicalJson(value: unknown, node: SchemaNode): Result<str
   const problems = walkSchema(value, node);
   const first = problems[0];
   if (first !== undefined) return err(first);
-  return ok(emit(value, node, undefined, 0));
+  return ok(`${emit(value, node, undefined, 0)}\n`);
 }

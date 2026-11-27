@@ -42,6 +42,21 @@ describe("validateProfile", () => {
     expect(!r.ok && r.error.code).toBe("PROFILE_COUNT_MISMATCH");
   });
 
+  it("returns the specific top-level code with the report from validateProfile and compileProfile", () => {
+    for (const run of [validateProfile, compileProfile]) {
+      const r = run(makeProfile({ readableCount: 15 }));
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.error.code).toBe("PROFILE_COUNT_MISMATCH");
+        expect(r.error.report.totalViolations).toBeGreaterThanOrEqual(1);
+        expect(r.error.report.violations[0]?.code).toBe("PROFILE_COUNT_MISMATCH");
+      }
+    }
+    const bad = makeProfile({ hookMappings: [{ kind: "zigzag", verification: unverified } as never] });
+    const c = compileProfile(bad);
+    expect(!c.ok && c.error.code).toBe("HOOK_MAPPING_INVALID");
+  });
+
   it("reports HOOK_MAPPING_INVALID for an unknown kind", () => {
     const bad = makeProfile({ hookMappings: [{ kind: "zigzag", verification: unverified } as never] });
     const r = validateProfile(bad);

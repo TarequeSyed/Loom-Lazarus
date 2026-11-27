@@ -20,9 +20,12 @@ export function makeLoomConfig(input: LoomConfigInput, profile: MachineProfile):
 }
 
 /**
- * Run the same checks on a configuration that did not come through `makeLoomConfig` (for example from JSON),
- * with the same error codes in the same order, then `INVALID_FORMAT` for a wrong shape or `profileId` mismatch.
+ * Run the checks on a configuration that did not come through `makeLoomConfig` (for example from JSON).
  * The input is never defaulted.
+ *
+ * Errors, in check order: `INVALID_FORMAT` (wrong shape or `profileId` mismatch; checked first, since the other
+ * checks cannot run on a wrong shape), `INVALID_THREADS_PER_HOOK`, `HOOK_MAPPING_NOT_CONFIGURED`,
+ * `UNSUPPORTED_HOOK_MAPPING`, `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`.
  */
 export function validateLoomConfig(cfg: unknown, profile: MachineProfile): Result<LoomConfiguration> {
   void cfg;

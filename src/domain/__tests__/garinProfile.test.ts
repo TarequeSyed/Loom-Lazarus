@@ -22,4 +22,13 @@ describe("GARIN_PROFILE", () => {
       [0, 1, 2, 3, 4, 5, 6, 7].map((c) => [25, c]),
     );
   });
+
+  it("is deep-frozen", () => {
+    expect(Object.isFrozen(GARIN_PROFILE)).toBe(true);
+    expect(Object.isFrozen(GARIN_PROFILE.reservedPositions)).toBe(true);
+    expect(Object.isFrozen(GARIN_PROFILE.reservedPositions[0])).toBe(true);
+    expect(Object.isFrozen(GARIN_PROFILE.hookMappings[0]?.verification)).toBe(true);
+    expect(Object.isFrozen(GARIN_PROFILE.verification.readOrder)).toBe(true);
+    expect(Object.isFrozen(GARIN_PROFILE.readOrder)).toBe(true);
+  });
 });

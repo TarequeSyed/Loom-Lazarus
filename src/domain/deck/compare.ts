@@ -5,7 +5,7 @@
  */
 import { notImplemented } from "../_stub";
 import type { ActionId, ReadIndex } from "../brand";
-import type { Result } from "../result";
+import type { ReportedError, Result } from "../result";
 import type { Bit, Deck, RawObservation } from "../types";
 
 /** Deterministic structural equality. Never fails. */
@@ -31,9 +31,10 @@ export interface CellComparison {
 /**
  * Compare effective values cell by cell. Requires the same profile id and the same card ids.
  *
- * Errors: `INVALID_DECK` (different profile id or card ids), `CELL_COUNT_MISMATCH`.
+ * Errors, in check order: `INVALID_DECK` (either Deck fails `validateDeck`; the report is in the error),
+ * `DECK_SHAPE_MISMATCH` (different profile identifiers or different `cardId` lists, Req 12.9).
  */
-export function compareCells(truth: Deck, candidate: Deck): Result<CellComparison> {
+export function compareCells(truth: Deck, candidate: Deck): Result<CellComparison, ReportedError> {
   void truth;
   void candidate;
   return notImplemented("compareCells");
@@ -52,15 +53,16 @@ export type DamageFn = (
  * order. History is empty, `initial` is as in `createCard` (`restorationConfidence: null`), and one `unapproved`
  * record is created. The truth Deck is never modified.
  *
- * Errors: `INVALID_DECK` (the truth deck is invalid), `OBSERVED_WITHOUT_OBSERVATION`, `PROBABILITY_OUT_OF_RANGE`
- * (the damage function returned an invalid observation).
+ * Errors, in check order: `INVALID_DECK` (the truth deck fails `validateDeck`; the report is in the error), then the
+ * `createCard` codes for a damage result that is not a valid observation: `OBSERVED_WITHOUT_OBSERVATION`,
+ * `PROBABILITY_OUT_OF_RANGE`.
  */
 export function deriveDamagedDeck(
   truth: Deck,
   damage: DamageFn,
   rng: RandomFn,
   actionId: ActionId,
-): Result<Deck> {
+): Result<Deck, ReportedError> {
   void truth;
   void damage;
   void rng;

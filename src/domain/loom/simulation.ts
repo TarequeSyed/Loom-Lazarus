@@ -11,8 +11,9 @@ import type { SimulationState } from "./types";
 /**
  * Snapshot the deck and return `passIndex` 0, status `ready`, no rows.
  *
- * Errors, in precondition order: `INVALID_THREADS_PER_HOOK`, `HOOK_MAPPING_NOT_CONFIGURED`,
- * `UNSUPPORTED_HOOK_MAPPING`, `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`, `DECK_NOT_APPROVED`,
+ * Errors, in precondition order: `INVALID_FORMAT` (configuration shape or `profileId` mismatch),
+ * `INVALID_THREADS_PER_HOOK`, `HOOK_MAPPING_NOT_CONFIGURED`, `UNSUPPORTED_HOOK_MAPPING`,
+ * `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`, then the interpreter order: `DECK_NOT_APPROVED`,
  * `UNRESOLVED_CELL`, `FABRIC_TOO_LARGE`, `COLOUR_LAYER_OUT_OF_RANGE`, `INVALID_COLOUR_LAYER`.
  */
 export function create(deck: Deck, cfg: LoomConfiguration): Result<SimulationState> {
@@ -52,7 +53,14 @@ export function reset(s: SimulationState): SimulationState {
   return notImplemented("reset");
 }
 
-/** `create` followed by steps to completion. Errors: the same codes as `create`. */
+/**
+ * `create` followed by steps to completion.
+ *
+ * Errors: exactly the codes of `create`, in the same order (`INVALID_FORMAT`, `INVALID_THREADS_PER_HOOK`,
+ * `HOOK_MAPPING_NOT_CONFIGURED`, `UNSUPPORTED_HOOK_MAPPING`, `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`,
+ * `DECK_NOT_APPROVED`, `UNRESOLVED_CELL`, `FABRIC_TOO_LARGE`, `COLOUR_LAYER_OUT_OF_RANGE`,
+ * `INVALID_COLOUR_LAYER`). The stepping loop adds none.
+ */
 export function runToEnd(deck: Deck, cfg: LoomConfiguration): Result<SimulationState> {
   void deck;
   void cfg;

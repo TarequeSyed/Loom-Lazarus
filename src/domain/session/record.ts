@@ -3,7 +3,7 @@
  * Signature stubs (task 4.2). Bodies are implemented in task 14.3.
  */
 import { notImplemented } from "../_stub";
-import type { Result } from "../result";
+import type { ReportedError, Result } from "../result";
 import type { Deck, LoomConfiguration } from "../types";
 import type { SessionActionInput, SessionLog, SessionState } from "./sessionLog";
 
@@ -16,11 +16,15 @@ export interface RecordingSession {
 /**
  * Start a recording with `actionCount` 0. The deck is validated first (Req 15.17).
  *
- * Errors: `INVALID_DECK` (with report), plus the loom configuration codes
- * (`INVALID_THREADS_PER_HOOK`, `HOOK_MAPPING_NOT_CONFIGURED`, `UNSUPPORTED_HOOK_MAPPING`, `MIRROR_NOT_CONFIGURED`,
- * `UNSUPPORTED_MIRROR`) when `config` is supplied and invalid.
+ * Errors, in check order: `INVALID_DECK` (the violation report is in the error, Req 12.9), then, when `config` is
+ * supplied, the `validateLoomConfig` codes (`INVALID_FORMAT` for a wrong shape or `profileId` mismatch first, then
+ * `INVALID_THREADS_PER_HOOK`, `HOOK_MAPPING_NOT_CONFIGURED`, `UNSUPPORTED_HOOK_MAPPING`, `MIRROR_NOT_CONFIGURED`,
+ * `UNSUPPORTED_MIRROR`).
  */
-export function createSession(deck: Deck, config?: LoomConfiguration): Result<RecordingSession> {
+export function createSession(
+  deck: Deck,
+  config?: LoomConfiguration,
+): Result<RecordingSession, ReportedError> {
   void deck;
   void config;
   return notImplemented("createSession");

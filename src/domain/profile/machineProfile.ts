@@ -173,7 +173,11 @@ function checkPosition(
 
 /**
  * Validate an unknown value as a MachineProfile. Never modifies, repairs or defaults the input.
- * The first violation is the returned error; all violations (up to LIMITS.maxViolations) are in `report`.
+ * The first violation is the returned error, with its specific code at top level; all violations
+ * (up to LIMITS.maxViolations) are in `report` (Req 2.13).
+ * Errors: `PROFILE_COUNT_MISMATCH` (readable count differs from rows x columns minus reserved),
+ * `HOOK_MAPPING_INVALID` (bad `hookMappings` entry), `INVALID_PROFILE` (any violation with no more
+ * specific code, including a `verified` field without a source).
  */
 export function validateProfile(p: unknown): Result<MachineProfile, ReportedError> {
   const c = new Collector();
@@ -416,6 +420,9 @@ const compileCache = new WeakMap<MachineProfile, CompiledProfile>();
 /**
  * Validate and compile a profile into read-order tables. Pure; the cache (keyed on object identity)
  * never changes results, so profiles must not be mutated after compiling.
+ * Errors: those of `validateProfile` (`PROFILE_COUNT_MISMATCH`, `HOOK_MAPPING_INVALID`, `INVALID_PROFILE`),
+ * each at top level with the report attached; then `PROFILE_COUNT_MISMATCH` if the derived read order
+ * length differs from `readableCount`.
  */
 export function compileProfile(profile: MachineProfile): Result<CompiledProfile, ReportedError> {
   const cached = compileCache.get(profile);

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { GridRow, ReadIndex } from "../brand";
-import { asGridRow, asReadIndex, asSequenceNumber } from "../brand";
+import {
+  asGridColumn,
+  asGridRow,
+  asMillimetres,
+  asPassIndex,
+  asReadIndex,
+  asSequenceNumber,
+  asWarpIndex,
+} from "../brand";
 import { LIMITS, SUPPORTED_SCHEMA_VERSIONS } from "../limits";
 import { ERROR_CODES, ERROR_MESSAGES, err, makeError, ok } from "../result";
 
@@ -47,10 +55,22 @@ describe("branded constructors", () => {
     const bad = asReadIndex(400, 400);
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.error.code).toBe("READ_INDEX_OUT_OF_RANGE");
-    const frac = asGridRow(1.5);
-    if (!frac.ok) expect(frac.error.code).toBe("INVALID_FORMAT");
-    expect(frac.ok).toBe(false);
     expect(asSequenceNumber(0).ok).toBe(false);
+  });
+
+  it("returns the design-table code for non-integer, negative and out-of-range values", () => {
+    const code = (r: { ok: boolean; error?: { code: string } }) => (r.ok ? "ok" : r.error?.code);
+    expect(code(asGridRow(1.5))).toBe("POSITION_OUT_OF_RANGE");
+    expect(code(asGridRow(-1))).toBe("POSITION_OUT_OF_RANGE");
+    expect(code(asGridColumn(0.5))).toBe("POSITION_OUT_OF_RANGE");
+    expect(code(asGridColumn(8, 8))).toBe("POSITION_OUT_OF_RANGE");
+    expect(code(asReadIndex(1.5))).toBe("READ_INDEX_OUT_OF_RANGE");
+    expect(code(asReadIndex(Number.NaN))).toBe("READ_INDEX_OUT_OF_RANGE");
+    expect(code(asWarpIndex(2.5))).toBe("POSITION_OUT_OF_RANGE");
+    expect(code(asPassIndex(0.5))).toBe("SEEK_OUT_OF_RANGE");
+    expect(code(asPassIndex(5, 5))).toBe("SEEK_OUT_OF_RANGE");
+    expect(code(asMillimetres(Number.NaN))).toBe("INVALID_FORMAT");
+    expect(code(asSequenceNumber(1.5))).toBe("INVALID_FORMAT");
   });
 
   it("does not accept a ReadIndex where a GridRow is expected", () => {

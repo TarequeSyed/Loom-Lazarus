@@ -59,6 +59,9 @@ export const ERROR_CODES = [
   "SESSION_ACTION_INVALID",
   "SESSION_ACTION_FAILED",
   "NOTHING_TO_WITHDRAW",
+  "DECK_SHAPE_MISMATCH",
+  "CARD_INDEX_OUT_OF_RANGE",
+  "INVALID_APPROVAL_HISTORY",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -121,6 +124,9 @@ export const ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   SESSION_ACTION_FAILED: "A session action failed during replay.",
   NOTHING_TO_WITHDRAW:
     "There is nothing to withdraw: the cell has no live entry, or its latest live entry is not an inference.",
+  DECK_SHAPE_MISMATCH: "The decks have different profile identifiers or different card identifier lists.",
+  CARD_INDEX_OUT_OF_RANGE: "The card index or insert position is outside the deck.",
+  INVALID_APPROVAL_HISTORY: "The approval history is empty or its sequence numbers are not contiguous from 1.",
 };
 
 export interface DomainError {

@@ -1,8 +1,9 @@
 // Generator self-check for task 3.1. Not one of properties P1 to P4.
-// Precondition: arbProfile defaults (1 to 16 rows and columns); seed 20260100.
+// Precondition: arbProfile defaults (1 to 16 rows and columns); seed SEED_AUX_PROFILE_VALIDATES.
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { compileProfile, validateProfile } from "../../profile/machineProfile";
+import { SEED_AUX_PROFILE_VALIDATES } from "../seeds";
 import { arbPosition, arbProfile, arbReservedList } from "./profile";
 
 describe("profile generators", () => {
@@ -16,7 +17,7 @@ describe("profile generators", () => {
         expect(compiled.ok).toBe(true);
         if (compiled.ok) expect(compiled.value.readToGrid.length).toBe(profile.readableCount);
       }),
-      { seed: 20260100, numRuns: 100 },
+      { seed: SEED_AUX_PROFILE_VALIDATES, numRuns: 100 },
     );
   });
 
@@ -26,7 +27,7 @@ describe("profile generators", () => {
         expect(validateProfile(profile).ok).toBe(true);
         expect(compileProfile(profile).ok).toBe(true);
       }),
-      { seed: 20260100, numRuns: 20 },
+      { seed: SEED_AUX_PROFILE_VALIDATES, numRuns: 20 },
     );
   });
 
@@ -48,7 +49,7 @@ describe("profile generators", () => {
           expect(pos.gridColumn).toBeLessThan(columns);
         },
       ),
-      { seed: 20260100, numRuns: 50 },
+      { seed: SEED_AUX_PROFILE_VALIDATES, numRuns: 50 },
     );
   });
 });

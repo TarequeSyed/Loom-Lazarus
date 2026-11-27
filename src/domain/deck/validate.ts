@@ -15,7 +15,15 @@ import type { Deck } from "../types";
  * that can appear in the report: `UNSUPPORTED_SCHEMA_VERSION`, `INVALID_PROFILE`, `PROFILE_COUNT_MISMATCH`,
  * `DECK_SIZE_OUT_OF_RANGE`, `DUPLICATE_CARD_ID`, `CELL_COUNT_MISMATCH`, `OBSERVED_WITHOUT_OBSERVATION`,
  * `PROBABILITY_OUT_OF_RANGE`, `MISSING_REQUIRED_FIELD`, `INVALID_PROVENANCE`, `EVIDENCE_REQUIRED`,
- * `EVIDENCE_TOO_LONG`, `INVALID_EDIT_HISTORY`, `UNRESOLVED_CELL` (approved deck with an unresolved cell).
+ * `EVIDENCE_TOO_LONG`, `INVALID_EDIT_HISTORY`, `INVALID_APPROVAL_HISTORY`, `DUPLICATE_ACTION_ID`,
+ * `HOOK_MAPPING_INVALID`, `UNRESOLVED_CELL` (approved deck with an unresolved cell).
+ *
+ * Code assignments (Req 6.15):
+ * - Empty approval list, or approval sequences not contiguous from 1: `INVALID_APPROVAL_HISTORY`.
+ * - Duplicate Action_Id anywhere in the Deck (entries and approval records): `DUPLICATE_ACTION_ID`.
+ * - Inconsistent entry sequence (not `1..lastEntrySequence` without gap or repeat) or a tampered
+ *   `lastEntrySequence`: `INVALID_EDIT_HISTORY`.
+ * - Profile violations inside a Deck keep the profile's own codes, including `HOOK_MAPPING_INVALID`.
  */
 export function validateDeck(d: unknown): Result<Deck, ReportedError> {
   void d;

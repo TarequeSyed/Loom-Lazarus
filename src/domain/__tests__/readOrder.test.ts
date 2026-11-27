@@ -138,8 +138,14 @@ describe("gridToPhysical", () => {
     expect(r).toEqual({ ok: true, value: { xMm: 5 + 2 * 8, yMm: 10 + 3 * 4 } });
   });
 
-  it("rejects an out-of-grid position before reporting missing dimensions", () => {
+  it("reports missing dimensions before an out-of-grid position", () => {
     const r = gridToPhysical(makeProfile(garinStyle, false), pos(5, 0));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe("PHYSICAL_DIMENSIONS_UNAVAILABLE");
+  });
+
+  it("rejects an out-of-grid position when dimensions are declared", () => {
+    const r = gridToPhysical(makeProfile(garinStyle, true), pos(5, 0));
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe("POSITION_OUT_OF_RANGE");
   });

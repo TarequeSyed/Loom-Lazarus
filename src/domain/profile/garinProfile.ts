@@ -11,6 +11,15 @@ import type { MachineProfile, VerificationStatus } from "./machineProfile";
 
 const NOT_CHECKED = "Not yet checked against the paper's figures.";
 
+/** Freezes `value` and every nested object and array. */
+function deepFreeze<T>(value: T): T {
+  if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}
+
 function unverified(
   basis: VerificationStatus["basis"],
   note: string,
@@ -18,7 +27,7 @@ function unverified(
   return { status: "unverified", basis, note };
 }
 
-export const GARIN_PROFILE: MachineProfile = {
+const GARIN_PROFILE_DATA: MachineProfile = {
   schemaVersion: 1,
   profileId: "garin-51x8",
   displayName: "GarÃ­n card format (51 x 8, unverified working profile)",
@@ -122,3 +131,6 @@ export const GARIN_PROFILE: MachineProfile = {
     ),
   },
 };
+
+/** The Garín profile, deep-frozen at module load (design.md, "Machine profile"). */
+export const GARIN_PROFILE: MachineProfile = deepFreeze(GARIN_PROFILE_DATA);

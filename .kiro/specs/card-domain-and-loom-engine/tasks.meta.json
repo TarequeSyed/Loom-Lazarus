@@ -208,6 +208,42 @@
         "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
         "timestamp": 1795790061483
       }
+    ],
+    "4.5 Apply G1 fixes to implemented profile, brand and writer modules": [
+      {
+        "executionId": "6362596b-33d4-4858-ac40-98b0b64c7d20",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795800309153
+      },
+      {
+        "executionId": "6362596b-33d4-4858-ac40-98b0b64c7d20",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795801668497
+      }
+    ],
+    "4.6 Apply G1 fixes to stub signatures and documented semantics": [
+      {
+        "executionId": "6362596b-33d4-4858-ac40-98b0b64c7d20",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795800309624
+      },
+      {
+        "executionId": "6362596b-33d4-4858-ac40-98b0b64c7d20",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795801668595
+      }
+    ],
+    "4.7 Update the public surface and strengthen the surface guard": [
+      {
+        "executionId": "6362596b-33d4-4858-ac40-98b0b64c7d20",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795801681564
+      },
+      {
+        "executionId": "6362596b-33d4-4858-ac40-98b0b64c7d20",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795805515164
+      }
     ]
   }
 }

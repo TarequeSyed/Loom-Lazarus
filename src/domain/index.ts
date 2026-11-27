@@ -60,10 +60,6 @@ export type {
 // Limits
 export { LIMITS, SUPPORTED_SCHEMA_VERSIONS } from "./limits";
 
-// Canonical JSON and schema node type
-export { writeCanonicalJson } from "./io/canonicalJson";
-export type { SchemaNode } from "./io/schema";
-
 // Deck import and export, migration
 export { exportDeckJson, importDeckJson } from "./io/serialize";
 export type { ImportedDeck } from "./io/serialize";

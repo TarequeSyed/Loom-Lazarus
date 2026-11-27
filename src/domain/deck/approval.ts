@@ -13,13 +13,17 @@ export interface AmbiguousAsDownPolicy {
   readonly note: string;
 }
 
-/** State of the last approval record. Never fails. */
+/**
+ * State of the last approval record. Never fails: it returns no `Result` and has no error codes.
+ * A deck with an empty or non-contiguous approval list is rejected by `validateDeck`
+ * (`INVALID_APPROVAL_HISTORY`), not here.
+ */
 export function currentApproval(deck: Deck): ApprovalState {
   void deck;
   return notImplemented("currentApproval");
 }
 
-/** The full audit trail, in order, without timestamps. Never fails. */
+/** The full audit trail, in order, without timestamps. Never fails: no `Result`, no error codes. */
 export function approvalHistory(deck: Deck): readonly ApprovalRecord[] {
   void deck;
   return notImplemented("approvalHistory");

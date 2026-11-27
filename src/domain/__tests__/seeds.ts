@@ -1,4 +1,4 @@
-﻿// Seeds for property tests: SEED_Pn = 20260100 + n (Req 13.1). P25 to P29 are the withdrawal properties.
+// Seeds for property tests: SEED_Pn = 20260100 + n (Req 13.1). P25 to P29 are the withdrawal properties.
 export const SEED_P1 = 20260101;
 export const SEED_P2 = 20260102;
 export const SEED_P3 = 20260103;
@@ -28,6 +28,12 @@ export const SEED_P26 = 20260126;
 export const SEED_P27 = 20260127;
 export const SEED_P28 = 20260128;
 export const SEED_P29 = 20260129;
+
+// Auxiliary seeds 20260190 to 20260199 (Req 13.26): generator self-checks and auxiliary writer properties.
+// 20260193 to 20260199 are reserved; add each use to the design's seed register.
+export const SEED_AUX_PROFILE_VALIDATES = 20260190;
+export const SEED_AUX_DECK_VALIDATES = 20260191;
+export const SEED_AUX_CANONICAL = 20260192;
 
 export const ALL_SEEDS: readonly number[] = [
   SEED_P1,

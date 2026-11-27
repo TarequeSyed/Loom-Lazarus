@@ -19,9 +19,6 @@ export interface HookMappingConfig {
   readonly mirror?: MirrorOrientation;
 }
 
-const KNOWN_KINDS: readonly string[] = ["contiguous-visualization", "repeat"];
-const KNOWN_MIRRORS: readonly string[] = ["none", "mirrored"];
-
 interface Checked {
   readonly readableCount: number;
   readonly threadsPerHook: number;
@@ -29,6 +26,10 @@ interface Checked {
   readonly mirrored: boolean;
 }
 
+/**
+ * Shared check order, first failure returned. There is no implicit default for the hook mapping or the mirror.
+ * `HOOK_MAPPING_INVALID` is reserved for bad profile data and is never returned here.
+ */
 function checkConfig(profile: MachineProfile, cfg: HookMappingConfig): Result<Checked> {
   const t: unknown = cfg.threadsPerHook;
   if (typeof t !== "number" || !Number.isInteger(t) || t < 1 || t > LIMITS.maxThreadsPerHook) {
@@ -41,13 +42,17 @@ function checkConfig(profile: MachineProfile, cfg: HookMappingConfig): Result<Ch
   }
   const kind: unknown = cfg.hookMapping;
   if (kind === undefined) return err(makeError("HOOK_MAPPING_NOT_CONFIGURED"));
-  if (typeof kind !== "string" || !KNOWN_KINDS.includes(kind)) {
-    return err(makeError("HOOK_MAPPING_INVALID", `Unknown hook mapping ${String(kind)}.`));
+  if (typeof kind !== "string" || !profile.hookMappings.some((m) => m.kind === kind)) {
+    return err(
+      makeError("UNSUPPORTED_HOOK_MAPPING", `Hook mapping ${String(kind)} is unknown or not permitted by the profile.`),
+    );
   }
   const mirror: unknown = cfg.mirror;
   if (mirror === undefined) return err(makeError("MIRROR_NOT_CONFIGURED"));
-  if (typeof mirror !== "string" || !KNOWN_MIRRORS.includes(mirror)) {
-    return err(makeError("UNSUPPORTED_MIRROR", `Unknown mirror option ${String(mirror)}.`));
+  if (typeof mirror !== "string" || !profile.mirrorOptions.some((m) => m === mirror)) {
+    return err(
+      makeError("UNSUPPORTED_MIRROR", `Mirror option ${String(mirror)} is unknown or not permitted by the profile.`),
+    );
   }
   return ok({
     readableCount: profile.readableCount,
@@ -56,8 +61,11 @@ function checkConfig(profile: MachineProfile, cfg: HookMappingConfig): Result<Ch
     mirrored: mirror === "mirrored",
   });
 }
-
-/** Total warp threads: `readableCount * threadsPerHook`. Identical for both mappings and both mirror options. */
+/**
+ * Total warp threads: `readableCount * threadsPerHook`. Identical for both mappings and both mirror options.
+ * Errors, in check order: `INVALID_THREADS_PER_HOOK`, `HOOK_MAPPING_NOT_CONFIGURED`,
+ * `UNSUPPORTED_HOOK_MAPPING`, `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`.
+ */
 export function warpCount(profile: MachineProfile, cfg: HookMappingConfig): Result<number> {
   const c = checkConfig(profile, cfg);
   if (!c.ok) return c;
@@ -67,6 +75,8 @@ export function warpCount(profile: MachineProfile, cfg: HookMappingConfig): Resu
 /**
  * Warp indices driven by one hook, after mirror, sorted ascending.
  * `hook` is a read index in [0, readableCount).
+ * Errors, in check order: `INVALID_THREADS_PER_HOOK`, `HOOK_MAPPING_NOT_CONFIGURED`,
+ * `UNSUPPORTED_HOOK_MAPPING`, `MIRROR_NOT_CONFIGURED`, `UNSUPPORTED_MIRROR`, `READ_INDEX_OUT_OF_RANGE`.
  */
 export function hookWarpIndices(
   profile: MachineProfile,
