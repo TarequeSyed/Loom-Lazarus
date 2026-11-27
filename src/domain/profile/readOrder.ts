@@ -90,7 +90,8 @@ export function gridToPhysical(p: MachineProfile, pos: GridPosition): Result<Phy
         `Position (${String(gridRow)}, ${String(gridColumn)}) is outside the ${p.gridRows} x ${p.gridColumns} grid.`,
       ),
     );
-  }  return ok({
+  }
+  return ok({
     xMm: (d.originXMm + gridColumn * d.columnPitchMm) as Millimetres,
     yMm: (d.originYMm + gridRow * d.rowPitchMm) as Millimetres,
   });

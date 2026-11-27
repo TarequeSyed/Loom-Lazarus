@@ -62,6 +62,7 @@ export const ERROR_CODES = [
   "DECK_SHAPE_MISMATCH",
   "CARD_INDEX_OUT_OF_RANGE",
   "INVALID_APPROVAL_HISTORY",
+  "OBSERVED_CELL_PROTECTED",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -127,6 +128,8 @@ export const ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   DECK_SHAPE_MISMATCH: "The decks have different profile identifiers or different card identifier lists.",
   CARD_INDEX_OUT_OF_RANGE: "The card index or insert position is outside the deck.",
   INVALID_APPROVAL_HISTORY: "The approval history is empty or its sequence numbers are not contiguous from 1.",
+  OBSERVED_CELL_PROTECTED:
+    "An observed cell cannot be changed by an inference; only an explicit user edit may override an observation.",
 };
 
 export interface DomainError {

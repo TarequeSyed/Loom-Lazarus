@@ -3,8 +3,11 @@
 // a normalised declaration text, so a changed parameter or return type is detected, not only a changed name.
 //
 // Regenerate (only through a spec update): set UPDATE_SURFACE_SNAPSHOT=1 and run this test file once.
-import { readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+// Refused when CI is set. A regeneration run writes the file and then FAILS; review the diff and rerun
+// without the switch (Req 12.13, 13.29).
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -93,16 +96,86 @@ function diffSurface(snapshot: readonly SurfaceEntry[], current: readonly Surfac
   ].join("\n");
 }
 
-const current = readSurface();
+type RegenerationDecision = "compare" | "regenerate" | "refuse";
 
-if (process.env["UPDATE_SURFACE_SNAPSHOT"] === "1") {
-  const generated: SurfaceSnapshot = { interfaceVersion: "1.1.0", exports: current };
-  writeFileSync(SNAPSHOT_PATH, `${JSON.stringify(generated, null, 2)}\n`, "utf8");
+const CI_REFUSAL_MESSAGE =
+  "UPDATE_SURFACE_SNAPSHOT is refused when the CI environment variable is set. Regenerate the surface snapshot locally through a spec update (Requirement 12.13).";
+const REGENERATED_MESSAGE =
+  "Snapshot regenerated; review the diff and rerun without UPDATE_SURFACE_SNAPSHOT (Requirement 12.13, 13.29).";
+
+/** Pure decision logic for the regeneration opt-in. CI wins over the switch. */
+function decideRegeneration(env: Readonly<Record<string, string | undefined>>): RegenerationDecision {
+  if (env["UPDATE_SURFACE_SNAPSHOT"] !== "1") return "compare";
+  const ci = env["CI"];
+  if (ci !== undefined && ci !== "") return "refuse";
+  return "regenerate";
 }
+
+function writeSnapshot(path: string, entries: readonly SurfaceEntry[]): void {
+  const generated: SurfaceSnapshot = { interfaceVersion: "1.1.0", exports: [...entries] };
+  writeFileSync(path, `${JSON.stringify(generated, null, 2)}\n`, "utf8");
+}
+
+/**
+ * Applies the decision. Returns the failure message the run must report, or null for a normal comparison run.
+ * A regeneration run writes first and still returns a failure message, so it never passes.
+ */
+function applyRegeneration(
+  decision: RegenerationDecision,
+  path: string,
+  entries: readonly SurfaceEntry[],
+): string | null {
+  if (decision === "refuse") return CI_REFUSAL_MESSAGE;
+  if (decision === "regenerate") {
+    writeSnapshot(path, entries);
+    return REGENERATED_MESSAGE;
+  }
+  return null;
+}
+
+const current = readSurface();
+const regenerationFailure = applyRegeneration(decideRegeneration(process.env), SNAPSHOT_PATH, current);
 
 const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, "utf8")) as SurfaceSnapshot;
 
 describe("domain exported surface", () => {
+  it("is not run in regeneration mode (a regeneration or refused run always fails)", () => {
+    expect(regenerationFailure, regenerationFailure ?? "").toBeNull();
+  });
+
+  it("refuses regeneration when CI is set and reports a clear message", () => {
+    expect(decideRegeneration({ UPDATE_SURFACE_SNAPSHOT: "1", CI: "true" })).toBe("refuse");
+    expect(decideRegeneration({ UPDATE_SURFACE_SNAPSHOT: "1", CI: "1" })).toBe("refuse");
+    expect(decideRegeneration({ UPDATE_SURFACE_SNAPSHOT: "1" })).toBe("regenerate");
+    expect(decideRegeneration({ CI: "true" })).toBe("compare");
+    expect(decideRegeneration({})).toBe("compare");
+    const dir = mkdtempSync(join(tmpdir(), "surface-ci-"));
+    try {
+      const path = join(dir, "snapshot.json");
+      const message = applyRegeneration("refuse", path, []);
+      expect(message).toContain("CI");
+      expect(message).toContain("refused");
+      expect(existsSync(path)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails a regeneration run after writing the file (temporary path)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "surface-regen-"));
+    try {
+      const path = join(dir, "snapshot.json");
+      const entries: SurfaceEntry[] = [{ name: "x", kind: "value", declaration: "() => void" }];
+      const message = applyRegeneration("regenerate", path, entries);
+      expect(message).toContain("Snapshot regenerated; review the diff and rerun without");
+      const written = JSON.parse(readFileSync(path, "utf8")) as SurfaceSnapshot;
+      expect(written.exports).toEqual(entries);
+      expect(applyRegeneration("compare", path, entries)).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("matches the committed snapshot (names, kinds and declaration text)", () => {
     const message = diffSurface(snapshot.exports, current);
     expect(message, message ?? "").toBeNull();

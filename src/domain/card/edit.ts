@@ -71,7 +71,10 @@ export interface InferenceInput {
  * `INFERENCE_CANNOT_BE_OBSERVED` (provenance `observed`) / `INVALID_PROVENANCE` (not one of the five values,
  * `user-edited`, or a value-rule violation above; these inputs are disjoint, so their order is immaterial),
  * `EVIDENCE_REQUIRED`, `EVIDENCE_TOO_LONG`, `PROBABILITY_OUT_OF_RANGE` (`null`, `undefined`,
- * non-number, NaN, infinity or outside [0, 1]), `INVALID_EDIT` (an un-reversed user edit protects the cell).
+ * non-number, NaN, infinity or outside [0, 1]), `OBSERVED_CELL_PROTECTED` (the cell's current provenance is
+ * `observed`, including a cell whose user edit was undone and that therefore shows its observed raw value again;
+ * only an explicit user edit may override an observation), `INVALID_EDIT` (an un-reversed user edit protects the
+ * cell).
  */
 export function setInferred(deck: Deck, i: InferenceInput): Result<Deck> {
   void deck;

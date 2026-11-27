@@ -186,8 +186,22 @@ Conventions for every task:
     - Review findings: S-5, N-5.
     - _Requirements: 7.16, 12.1, 12.6, 12.12_
 
+  - [x] 4.8 Apply G1 review round 2 fixes
+    - Source: `docs/reviews/2026-11-26-g1-domain-interface-r2.md` and the "G1 review round 2 resolutions" records in `requirements.md` and `design.md`. Pre-freeze corrections; `INTERFACE_VERSION` stays `"1.1.0"`. Depends on task 4.7.
+    - R2-5 in `result.ts`: add `OBSERVED_CELL_PROTECTED` to `ERROR_CODES` with a stable, non-empty `ERROR_MESSAGES` entry. This changes the `ErrorCode` union.
+    - R2-5 in `card/edit.ts`: `setInferred` TSDoc lists `OBSERVED_CELL_PROTECTED` in the design's check order (after the input checks, before `INVALID_EDIT`), including a cell whose user edit was undone. The body stays a stub.
+    - R2-9 in `deck/approval.ts`: `requestApproval` TSDoc states that derived policy Action_Ids are checked for uniqueness and that a collision returns `DUPLICATE_ACTION_ID` with the Deck unchanged.
+    - R2-1 and R2-3 in `session/serialize.ts`: `exportSessionLog` TSDoc lists `SESSION_TRUNCATED`, `SESSION_TOO_LARGE`, `INPUT_TOO_LARGE` in the design's order (no `INVALID_FORMAT` for a non-finite number); `importSessionLog` TSDoc states that it runs the `replaySessionJson` order up to and including `UNKNOWN_FIELD`, then the log-level checks without applying actions.
+    - R2-4 in `session/digest.ts`: `stateDigest` TSDoc matches its S-8 row, including the digest form (the simulation's deck is replaced by `deckDigest`; the persisted `SimulationState` keeps the full deck) and that the digest input includes the writer's trailing `\n`.
+    - R2-8: fix the formatting defect at `profile/readOrder.ts` line 93 (`}  return ok({` on one line), and in `profile/garinProfile.ts` replace the U+FFFD character in the comment at line 135 with the intended text (probably "Garín"). No behaviour change.
+    - R2-2 in `src/domain/__tests__/surface.test.ts`: the snapshot regeneration switch (`UPDATE_SURFACE_SNAPSHOT`) is refused when `CI` is set, and a regeneration run fails after writing the file, so a run that rewrites the snapshot never passes.
+    - Regenerate `surface.snapshot.json` once, because the `ErrorCode` union changed; do not hand-edit it. Add example tests for the CI refusal and for the regeneration run failing after writing.
+    - Files owned: `src/domain/result.ts`, `src/domain/card/edit.ts`, `src/domain/deck/approval.ts`, `src/domain/session/serialize.ts`, `src/domain/session/digest.ts`, `src/domain/profile/readOrder.ts`, `src/domain/profile/garinProfile.ts`, `src/domain/__tests__/surface.test.ts`, `src/domain/__tests__/surface.snapshot.json`.
+    - Review findings: R2-1, R2-2, R2-3, R2-4, R2-5, R2-8, R2-9.
+    - _Requirements: 5.36, 5.37, 5.38, 5.39, 12.13, 13.29, 16.1_
+
 - [ ] 5. INTERFACE FREEZE checkpoint
-  - Entry conditions, all required before the freeze: (1) tasks 4.5, 4.6 and 4.7 are done; (2) a second independent review of `src/domain` against the spec (`requirements.md`, `design.md`, steering) is saved under `docs/reviews/` with the verdict `PASS`, written by a reviewer who did not write the code or the G1 fixes; a `FAIL` or missing review blocks the freeze.
+  - Entry conditions, all required before the freeze: (1) tasks 4.5, 4.6, 4.7 and 4.8 are done; (2) a further independent review of `src/domain` against the spec (`requirements.md`, `design.md`, steering) after task 4.8 (round 3) is saved under `docs/reviews/` with `VERDICT: PASS`, written by a reviewer who did not write the code or the G1 fixes; a `FAIL` or missing review blocks the freeze.
   - Only after both conditions hold: ensure `vitest --run` and the type check pass, the regenerated surface snapshot is committed, and the stub list in task 4.2 is complete. Then declare the freeze.
   - From this point `types.ts`, `result.ts`, `brand.ts`, `limits.ts`, `profile/*`, `index.ts` and all exported signatures change only through a spec update. Crew workers must not edit these files.
   - Ensure all tests pass, ask the user if questions arise.
@@ -563,26 +577,27 @@ Conventions for every task:
     { "id": 7, "tasks": ["4.4"] },
     { "id": 8, "tasks": ["4.5", "4.6"] },
     { "id": 9, "tasks": ["4.7"] },
-    { "id": 10, "tasks": ["5"] },
-    { "id": 11, "tasks": ["6.1"] },
-    { "id": 12, "tasks": ["6.2", "6.3"] },
-    { "id": 13, "tasks": ["6.4", "6.5", "6.6"] },
-    { "id": 14, "tasks": ["6.7"] },
-    { "id": 15, "tasks": ["6.8", "6.9", "6.10", "6.11", "6.12", "6.13", "6.14", "6.15", "6.16", "6.17", "6.18"] },
-    { "id": 16, "tasks": ["7"] },
-    { "id": 17, "tasks": ["8.1", "8.2", "9.1", "10.1", "11.1", "12.1", "12.2", "12.3", "12.4"] },
-    { "id": 18, "tasks": ["8.3", "8.4", "8.5", "8.6", "9.2", "10.2", "11.2", "11.3"] },
-    { "id": 19, "tasks": ["9.3", "9.4"] },
-    { "id": 20, "tasks": ["9.5", "9.6", "9.7", "9.8", "9.9", "9.10"] },
-    { "id": 21, "tasks": ["13"] },
-    { "id": 22, "tasks": ["14.1", "14.2", "14.4"] },
-    { "id": 23, "tasks": ["14.3", "14.5"] },
-    { "id": 24, "tasks": ["14.6"] },
-    { "id": 25, "tasks": ["14.7", "14.8", "14.9", "14.10", "14.11", "14.12"] },
-    { "id": 26, "tasks": ["15.1"] },
-    { "id": 27, "tasks": ["15.2"] },
-    { "id": 28, "tasks": ["16.1", "16.2", "16.3", "16.4", "16.5", "16.6"] },
-    { "id": 29, "tasks": ["17"] }
+    { "id": 10, "tasks": ["4.8"] },
+    { "id": 11, "tasks": ["5"] },
+    { "id": 12, "tasks": ["6.1"] },
+    { "id": 13, "tasks": ["6.2", "6.3"] },
+    { "id": 14, "tasks": ["6.4", "6.5", "6.6"] },
+    { "id": 15, "tasks": ["6.7"] },
+    { "id": 16, "tasks": ["6.8", "6.9", "6.10", "6.11", "6.12", "6.13", "6.14", "6.15", "6.16", "6.17", "6.18"] },
+    { "id": 17, "tasks": ["7"] },
+    { "id": 18, "tasks": ["8.1", "8.2", "9.1", "10.1", "11.1", "12.1", "12.2", "12.3", "12.4"] },
+    { "id": 19, "tasks": ["8.3", "8.4", "8.5", "8.6", "9.2", "10.2", "11.2", "11.3"] },
+    { "id": 20, "tasks": ["9.3", "9.4"] },
+    { "id": 21, "tasks": ["9.5", "9.6", "9.7", "9.8", "9.9", "9.10"] },
+    { "id": 22, "tasks": ["13"] },
+    { "id": 23, "tasks": ["14.1", "14.2", "14.4"] },
+    { "id": 24, "tasks": ["14.3", "14.5"] },
+    { "id": 25, "tasks": ["14.6"] },
+    { "id": 26, "tasks": ["14.7", "14.8", "14.9", "14.10", "14.11", "14.12"] },
+    { "id": 27, "tasks": ["15.1"] },
+    { "id": 28, "tasks": ["15.2"] },
+    { "id": 29, "tasks": ["16.1", "16.2", "16.3", "16.4", "16.5", "16.6"] },
+    { "id": 30, "tasks": ["17"] }
   ]
 }
 ```

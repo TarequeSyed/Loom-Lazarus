@@ -35,8 +35,11 @@ export function approvalHistory(deck: Deck): readonly ApprovalRecord[] {
  * `null` confidence stays `null`, `policyNote` set, derived actionId `"<actionId>#<cardId>#<readIndex>"`).
  * Then an `approved` record (cause `approve`) is appended.
  *
- * Errors, in check order: `DUPLICATE_ACTION_ID`, `UNRESOLVED_CELLS` (up to 100 cell references and a total count;
- * only when no policy is supplied).
+ * Derived policy Action_Ids are checked for uniqueness against the Deck's history (and against each other). A
+ * collision returns `DUPLICATE_ACTION_ID` and the Deck is unchanged.
+ *
+ * Errors, in check order: `DUPLICATE_ACTION_ID` (the supplied actionId, or a derived policy actionId when a policy
+ * is supplied), `UNRESOLVED_CELLS` (up to 100 cell references and a total count; only when no policy is supplied).
  */
 export function requestApproval(
   deck: Deck,

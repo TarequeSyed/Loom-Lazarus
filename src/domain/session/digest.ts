@@ -10,8 +10,10 @@ export { DIGEST_ALGORITHM } from "./sessionLog";
 
 /**
  * 64-bit FNV-1a over the UTF-8 bytes of the canonical JSON of `{ deck, simulation? }`, as 16 lowercase hex
- * characters. A `null` confidence and a `0` confidence give different digests. This is a corruption check, not
- * tamper protection. Never fails.
+ * characters. Digest form: in the digested `simulation`, the deck is replaced by its `deckDigest`; the persisted
+ * `SimulationState` keeps the full deck. The digest input is the canonical writer's output including its trailing
+ * `\n`. A `null` confidence and a `0` confidence give different digests. This is a corruption check, not
+ * tamper protection. Never fails: no `Result`, no error codes.
  */
 export function stateDigest(state: SessionState): string {
   void state;

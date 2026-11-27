@@ -132,5 +132,5 @@ const GARIN_PROFILE_DATA: MachineProfile = {
   },
 };
 
-/** The Garín profile, deep-frozen at module load (design.md, "Machine profile"). */
+/** The GarÃ­n profile, deep-frozen at module load (design.md, "Machine profile"). */
 export const GARIN_PROFILE: MachineProfile = deepFreeze(GARIN_PROFILE_DATA);
