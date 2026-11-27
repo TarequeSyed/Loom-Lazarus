@@ -2,7 +2,7 @@
 
 An explainable, browser-based restoration workbench for historical Jacquard punched-card programs. Built for the Kiroween 2026 hackathon, Resurrection category.
 
-> **Status: under construction.** No application code exists yet. This README describes intent, not results. The implementation plan is in [`docs/PLAN.md`](docs/PLAN.md).
+> **Status: under construction.** No application code exists yet. This README describes intent, not results.
 
 ## What it is meant to do
 

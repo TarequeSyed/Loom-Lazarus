@@ -18,7 +18,8 @@ data/generated/
 !.env.example
 *.log
 
-# Personal notes kept outside version control (plan decision D-8)
+# Personal notes and private planning documents, kept outside version control
 Personal logs.txt
+private/
 
 # Never ignore .kiro: steering, specs, hooks and MCP configuration are submission evidence.
