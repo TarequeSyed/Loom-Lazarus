@@ -200,7 +200,7 @@ Conventions for every task:
     - Review findings: R2-1, R2-2, R2-3, R2-4, R2-5, R2-8, R2-9.
     - _Requirements: 5.36, 5.37, 5.38, 5.39, 12.13, 13.29, 16.1_
 
-- [-] 5. INTERFACE FREEZE checkpoint
+- [x] 5. INTERFACE FREEZE checkpoint
   - Entry conditions, all required before the freeze: (1) tasks 4.5, 4.6, 4.7 and 4.8 are done; (2) a further independent review of `src/domain` against the spec (`requirements.md`, `design.md`, steering) after task 4.8 (round 3) is saved under `docs/reviews/` with `VERDICT: PASS`, written by a reviewer who did not write the code or the G1 fixes; a `FAIL` or missing review blocks the freeze.
   - Only after both conditions hold: ensure `vitest --run` and the type check pass, the regenerated surface snapshot is committed, and the stub list in task 4.2 is complete. Then declare the freeze.
   - From this point `types.ts`, `result.ts`, `brand.ts`, `limits.ts`, `profile/*`, `index.ts` and all exported signatures change only through a spec update. Crew workers must not edit these files.
