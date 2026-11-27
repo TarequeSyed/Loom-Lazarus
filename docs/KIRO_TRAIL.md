@@ -105,3 +105,14 @@ Verified record of how Kiro was used to build Loom Lazarus. Procedure: `.kiro/st
 - Screenshots: none
 - Commits: this entry's commit
 - Decisions: `CellSeed.initial` is `Omit<CellInitial, "restorationConfidence">`, so callers cannot pass a numeric confidence and `createCard` always writes `null`. `MIGRATIONS` and the schema key tables are not on the public surface. Several stub error-code lists were inferred by the worker and are flagged for review at the interface freeze (task 5).
+### 2026-11-26  Kiro Crew dry run attempted from the IDE: blocked
+- Surface: Kiro IDE, `kirocrew-conductor` agent invoked from the main IDE session
+- Steering: all always-included files
+- Feature Spec: none (two documentation chores: `docs/vision-dev-dependencies.md`, `data/README.md`)
+- Hooks fired: none observed
+- MCP tools used: Kiro Crew work-ledger and dispatch tools were called and refused
+- Bugfix Spec: none
+- Tests: none
+- Screenshots: none
+- Commits: none from the run. The repository stayed on `main` at 26a46c7 with a clean working tree, one worktree and no `crew/*` branches
+- Decisions: Crew refused to open a work ledger and to dispatch workers because a session started from the IDE has no identity Crew can verify. It reports that Crew sessions must start from the Kiro Crew dashboard (Conductor mode) with `kirocrew-work` and `kirocrew-dashboard` routed through MCP Management or listed in `mcp_gateway.stub_servers`, checked with `kirocrew doctor`. Crew also has no worktree tool; isolation would come from each worker creating its own `git worktree`. Host free memory was 2.8 GB, which Crew rated tight. Credit meter before the run: 570.47 of 4,000 used (read by the user). Risk R-21 (Crew behaviour unverified) has materialised; the plan's fallback in Section 8.5 applies until Crew runs from the dashboard.
