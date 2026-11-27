@@ -1,0 +1,685 @@
+{
+  "interfaceVersion": "1.1.0",
+  "exports": [
+    {
+      "name": "ActionId",
+      "kind": "type"
+    },
+    {
+      "name": "AmbiguousAsDownPolicy",
+      "kind": "type"
+    },
+    {
+      "name": "ApprovalRecord",
+      "kind": "type"
+    },
+    {
+      "name": "ApprovalState",
+      "kind": "type"
+    },
+    {
+      "name": "Bit",
+      "kind": "type"
+    },
+    {
+      "name": "Bitmap",
+      "kind": "type"
+    },
+    {
+      "name": "Card",
+      "kind": "type"
+    },
+    {
+      "name": "CardToPassSpec",
+      "kind": "type"
+    },
+    {
+      "name": "Cell",
+      "kind": "type"
+    },
+    {
+      "name": "CellComparison",
+      "kind": "type"
+    },
+    {
+      "name": "CellInitial",
+      "kind": "type"
+    },
+    {
+      "name": "CellSeed",
+      "kind": "type"
+    },
+    {
+      "name": "CompiledGridPosition",
+      "kind": "type"
+    },
+    {
+      "name": "CompiledProfile",
+      "kind": "type"
+    },
+    {
+      "name": "DIGEST_ALGORITHM",
+      "kind": "value"
+    },
+    {
+      "name": "DamageFn",
+      "kind": "type"
+    },
+    {
+      "name": "Deck",
+      "kind": "type"
+    },
+    {
+      "name": "DomainError",
+      "kind": "type"
+    },
+    {
+      "name": "DuplicateCardPayload",
+      "kind": "type"
+    },
+    {
+      "name": "ERROR_CODES",
+      "kind": "value"
+    },
+    {
+      "name": "ERROR_MESSAGES",
+      "kind": "value"
+    },
+    {
+      "name": "EditEntry",
+      "kind": "type"
+    },
+    {
+      "name": "EffectiveView",
+      "kind": "type"
+    },
+    {
+      "name": "EndHoleSpec",
+      "kind": "type"
+    },
+    {
+      "name": "ErrorCode",
+      "kind": "type"
+    },
+    {
+      "name": "Evidence",
+      "kind": "type"
+    },
+    {
+      "name": "EvidenceRef",
+      "kind": "type"
+    },
+    {
+      "name": "FabricBuffer",
+      "kind": "type"
+    },
+    {
+      "name": "FabricCell",
+      "kind": "type"
+    },
+    {
+      "name": "FabricCoordinate",
+      "kind": "type"
+    },
+    {
+      "name": "FabricRow",
+      "kind": "type"
+    },
+    {
+      "name": "GARIN_PROFILE",
+      "kind": "value"
+    },
+    {
+      "name": "GridColumn",
+      "kind": "type"
+    },
+    {
+      "name": "GridPosition",
+      "kind": "type"
+    },
+    {
+      "name": "GridRow",
+      "kind": "type"
+    },
+    {
+      "name": "HookMappingConfig",
+      "kind": "type"
+    },
+    {
+      "name": "HookMappingKind",
+      "kind": "type"
+    },
+    {
+      "name": "HookMappingSpec",
+      "kind": "type"
+    },
+    {
+      "name": "INTERFACE_VERSION",
+      "kind": "value"
+    },
+    {
+      "name": "ImportedDeck",
+      "kind": "type"
+    },
+    {
+      "name": "InferenceEntry",
+      "kind": "type"
+    },
+    {
+      "name": "InferenceInput",
+      "kind": "type"
+    },
+    {
+      "name": "InsertCardPayload",
+      "kind": "type"
+    },
+    {
+      "name": "LIMITS",
+      "kind": "value"
+    },
+    {
+      "name": "LoomConfigInput",
+      "kind": "type"
+    },
+    {
+      "name": "LoomConfiguration",
+      "kind": "type"
+    },
+    {
+      "name": "MachineProfile",
+      "kind": "type"
+    },
+    {
+      "name": "MigrationOutcome",
+      "kind": "type"
+    },
+    {
+      "name": "Millimetres",
+      "kind": "type"
+    },
+    {
+      "name": "MirrorOrientation",
+      "kind": "type"
+    },
+    {
+      "name": "PassIndex",
+      "kind": "type"
+    },
+    {
+      "name": "PhysicalDimensions",
+      "kind": "type"
+    },
+    {
+      "name": "PhysicalLocation",
+      "kind": "type"
+    },
+    {
+      "name": "PreviousFields",
+      "kind": "type"
+    },
+    {
+      "name": "ProfileFieldKey",
+      "kind": "type"
+    },
+    {
+      "name": "Provenance",
+      "kind": "type"
+    },
+    {
+      "name": "RandomFn",
+      "kind": "type"
+    },
+    {
+      "name": "RawObservation",
+      "kind": "type"
+    },
+    {
+      "name": "ReadIndex",
+      "kind": "type"
+    },
+    {
+      "name": "ReadOrderSpec",
+      "kind": "type"
+    },
+    {
+      "name": "RecordingSession",
+      "kind": "type"
+    },
+    {
+      "name": "RemoveCardPayload",
+      "kind": "type"
+    },
+    {
+      "name": "ReorderCardsPayload",
+      "kind": "type"
+    },
+    {
+      "name": "ReportedError",
+      "kind": "type"
+    },
+    {
+      "name": "RequestApprovalPayload",
+      "kind": "type"
+    },
+    {
+      "name": "ReservedPositionSpec",
+      "kind": "type"
+    },
+    {
+      "name": "ResolvedColours",
+      "kind": "type"
+    },
+    {
+      "name": "Result",
+      "kind": "type"
+    },
+    {
+      "name": "RevokeApprovalPayload",
+      "kind": "type"
+    },
+    {
+      "name": "RunStatus",
+      "kind": "type"
+    },
+    {
+      "name": "SIMULATION_DISCLAIMER",
+      "kind": "value"
+    },
+    {
+      "name": "SUPPORTED_SCHEMA_VERSIONS",
+      "kind": "value"
+    },
+    {
+      "name": "SVG_CAVEAT",
+      "kind": "value"
+    },
+    {
+      "name": "SchemaNode",
+      "kind": "type"
+    },
+    {
+      "name": "SequenceNumber",
+      "kind": "type"
+    },
+    {
+      "name": "SessionAction",
+      "kind": "type"
+    },
+    {
+      "name": "SessionActionInput",
+      "kind": "type"
+    },
+    {
+      "name": "SessionActionKind",
+      "kind": "type"
+    },
+    {
+      "name": "SessionLog",
+      "kind": "type"
+    },
+    {
+      "name": "SessionLogContext",
+      "kind": "type"
+    },
+    {
+      "name": "SessionPayload",
+      "kind": "type"
+    },
+    {
+      "name": "SessionState",
+      "kind": "type"
+    },
+    {
+      "name": "SetInferredPayload",
+      "kind": "type"
+    },
+    {
+      "name": "SimCreatePayload",
+      "kind": "type"
+    },
+    {
+      "name": "SimEmptyPayload",
+      "kind": "type"
+    },
+    {
+      "name": "SimSeekPayload",
+      "kind": "type"
+    },
+    {
+      "name": "SimulationDisclaimerText",
+      "kind": "type"
+    },
+    {
+      "name": "SimulationState",
+      "kind": "type"
+    },
+    {
+      "name": "SvgExportOptions",
+      "kind": "type"
+    },
+    {
+      "name": "UndoEditPayload",
+      "kind": "type"
+    },
+    {
+      "name": "UndoEntry",
+      "kind": "type"
+    },
+    {
+      "name": "UserEditEntry",
+      "kind": "type"
+    },
+    {
+      "name": "UserEditInput",
+      "kind": "type"
+    },
+    {
+      "name": "UserEditPayload",
+      "kind": "type"
+    },
+    {
+      "name": "VerificationStatus",
+      "kind": "type"
+    },
+    {
+      "name": "ViolationReport",
+      "kind": "type"
+    },
+    {
+      "name": "WarpIndex",
+      "kind": "type"
+    },
+    {
+      "name": "WeftColourLayer",
+      "kind": "type"
+    },
+    {
+      "name": "WithdrawInferencePayload",
+      "kind": "type"
+    },
+    {
+      "name": "WithdrawalEntry",
+      "kind": "type"
+    },
+    {
+      "name": "WithdrawalInput",
+      "kind": "type"
+    },
+    {
+      "name": "appendAction",
+      "kind": "value"
+    },
+    {
+      "name": "applySessionAction",
+      "kind": "value"
+    },
+    {
+      "name": "approvalHistory",
+      "kind": "value"
+    },
+    {
+      "name": "asActionId",
+      "kind": "value"
+    },
+    {
+      "name": "asGridColumn",
+      "kind": "value"
+    },
+    {
+      "name": "asGridRow",
+      "kind": "value"
+    },
+    {
+      "name": "asMillimetres",
+      "kind": "value"
+    },
+    {
+      "name": "asPassIndex",
+      "kind": "value"
+    },
+    {
+      "name": "asReadIndex",
+      "kind": "value"
+    },
+    {
+      "name": "asSequenceNumber",
+      "kind": "value"
+    },
+    {
+      "name": "asWarpIndex",
+      "kind": "value"
+    },
+    {
+      "name": "bitmapToDeck",
+      "kind": "value"
+    },
+    {
+      "name": "compareCells",
+      "kind": "value"
+    },
+    {
+      "name": "compileProfile",
+      "kind": "value"
+    },
+    {
+      "name": "create",
+      "kind": "value"
+    },
+    {
+      "name": "createCard",
+      "kind": "value"
+    },
+    {
+      "name": "createDeck",
+      "kind": "value"
+    },
+    {
+      "name": "createSession",
+      "kind": "value"
+    },
+    {
+      "name": "currentApproval",
+      "kind": "value"
+    },
+    {
+      "name": "deckEquals",
+      "kind": "value"
+    },
+    {
+      "name": "decodeCard",
+      "kind": "value"
+    },
+    {
+      "name": "deriveDamagedDeck",
+      "kind": "value"
+    },
+    {
+      "name": "duplicateCard",
+      "kind": "value"
+    },
+    {
+      "name": "effectiveView",
+      "kind": "value"
+    },
+    {
+      "name": "err",
+      "kind": "value"
+    },
+    {
+      "name": "exportCardSvg",
+      "kind": "value"
+    },
+    {
+      "name": "exportDeckJson",
+      "kind": "value"
+    },
+    {
+      "name": "exportDeckSvg",
+      "kind": "value"
+    },
+    {
+      "name": "exportSessionLog",
+      "kind": "value"
+    },
+    {
+      "name": "fabricCellAt",
+      "kind": "value"
+    },
+    {
+      "name": "fabricCoordinate",
+      "kind": "value"
+    },
+    {
+      "name": "fabricToCells",
+      "kind": "value"
+    },
+    {
+      "name": "getCell",
+      "kind": "value"
+    },
+    {
+      "name": "getCellByCardAndIndex",
+      "kind": "value"
+    },
+    {
+      "name": "gridToPhysical",
+      "kind": "value"
+    },
+    {
+      "name": "gridToReadIndex",
+      "kind": "value"
+    },
+    {
+      "name": "hookWarpIndices",
+      "kind": "value"
+    },
+    {
+      "name": "importDeckJson",
+      "kind": "value"
+    },
+    {
+      "name": "importSessionLog",
+      "kind": "value"
+    },
+    {
+      "name": "insertCard",
+      "kind": "value"
+    },
+    {
+      "name": "latestLiveEntry",
+      "kind": "value"
+    },
+    {
+      "name": "makeError",
+      "kind": "value"
+    },
+    {
+      "name": "makeLoomConfig",
+      "kind": "value"
+    },
+    {
+      "name": "migrateToCurrent",
+      "kind": "value"
+    },
+    {
+      "name": "ok",
+      "kind": "value"
+    },
+    {
+      "name": "passResult",
+      "kind": "value"
+    },
+    {
+      "name": "pause",
+      "kind": "value"
+    },
+    {
+      "name": "readIndexToGrid",
+      "kind": "value"
+    },
+    {
+      "name": "removeCard",
+      "kind": "value"
+    },
+    {
+      "name": "reorderCards",
+      "kind": "value"
+    },
+    {
+      "name": "replaySession",
+      "kind": "value"
+    },
+    {
+      "name": "replaySessionJson",
+      "kind": "value"
+    },
+    {
+      "name": "requestApproval",
+      "kind": "value"
+    },
+    {
+      "name": "reset",
+      "kind": "value"
+    },
+    {
+      "name": "resume",
+      "kind": "value"
+    },
+    {
+      "name": "revokeApproval",
+      "kind": "value"
+    },
+    {
+      "name": "runToEnd",
+      "kind": "value"
+    },
+    {
+      "name": "seek",
+      "kind": "value"
+    },
+    {
+      "name": "setInferred",
+      "kind": "value"
+    },
+    {
+      "name": "stateDigest",
+      "kind": "value"
+    },
+    {
+      "name": "step",
+      "kind": "value"
+    },
+    {
+      "name": "undoEdit",
+      "kind": "value"
+    },
+    {
+      "name": "userEdit",
+      "kind": "value"
+    },
+    {
+      "name": "validateDeck",
+      "kind": "value"
+    },
+    {
+      "name": "validateLoomConfig",
+      "kind": "value"
+    },
+    {
+      "name": "validateProfile",
+      "kind": "value"
+    },
+    {
+      "name": "warpCount",
+      "kind": "value"
+    },
+    {
+      "name": "withdrawInference",
+      "kind": "value"
+    },
+    {
+      "name": "writeCanonicalJson",
+      "kind": "value"
+    }
+  ]
+}

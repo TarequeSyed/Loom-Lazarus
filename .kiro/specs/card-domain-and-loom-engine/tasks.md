@@ -98,13 +98,13 @@ Conventions for every task:
     - Files owned: `profile/hookMapping.ts`.
     - _Requirements: 4.7, 8.2, 8.7, 14.6, 14.7, 14.8_
 
-  - [ ]* 3.4 Write property test for read-order bijection
+  - [x]* 3.4 Write property test for read-order bijection
     - **Property 1: Read-order bijection**
     - **Validates: Requirements 4.1, 4.2, 4.9, 13.4**
     - Seed `SEED_P1`, 300 runs, profiles up to 256 x 256, tables only.
     - Files owned: `src/domain/__tests__/readOrderBijection.props.test.ts`.
 
-  - [ ]* 3.5 Write property test for rejected positions
+  - [x]* 3.5 Write property test for rejected positions
     - **Property 2: Reserved and out-of-range positions are rejected**
     - **Validates: Requirements 3.4, 3.5, 4.3, 4.4, 13.5**
     - Seed `SEED_P2`, 200 runs. The "Card unchanged" part is covered after core deck work in task 6.14; this task checks the conversion functions only.
@@ -122,7 +122,7 @@ Conventions for every task:
     - Seed `SEED_P4`, 300 runs, `readableCount` 1 to 64, threads-per-hook in [1, 64], index arithmetic only. Add Garín example tests for 6,400 warp threads under both mappings. The `fabricCoordinate` agreement check is added in task 9.10.
     - Files owned: `src/domain/__tests__/hookMapping.props.test.ts`.
 
-- [ ] 4. Canonical JSON, interface stubs and public index
+- [x] 4. Canonical JSON, interface stubs and public index
   - [x] 4.1 Implement the canonical JSON writer and schema key walk
     - Create `io/canonicalJson.ts`: schema-ordered stable writer, two-space indent, `\n` line endings, finite numbers only, absent optional fields omitted, no timestamps. Exception: `restorationConfidence` (and an inference entry's `confidence`) is always written, and `null` is written as the JSON literal `null`, never coerced to `0` or omitted.
     - Create `io/schema.ts`: key lists per persisted type and an unknown-field walk returning `UNKNOWN_FIELD` with a path.
@@ -130,7 +130,7 @@ Conventions for every task:
     - Files owned: `io/canonicalJson.ts`, `io/schema.ts`, `src/domain/__tests__/canonicalJson.test.ts`.
     - _Requirements: 7.2, 7.7, 7.12, 15.6, 15.16_
 
-  - [ ] 4.2 Declare signature stubs for every remaining module
+  - [x] 4.2 Declare signature stubs for every remaining module
     - In each file below, export the final function signatures and exported constants from the design, with TSDoc listing the Result error codes. Function bodies call a temporary `notImplemented()` helper in `src/domain/_stub.ts`.
     - Files: `card/card.ts`, `card/edit.ts`, `deck/deck.ts`, `deck/approval.ts`, `deck/validate.ts`, `deck/compare.ts`, `io/serialize.ts`, `io/migrate.ts`, `loom/config.ts`, `loom/interpreter.ts`, `loom/simulation.ts`, `session/apply.ts`, `session/record.ts`, `session/replay.ts`, `session/digest.ts`, `session/serialize.ts`, `bitmap/bitmapToDeck.ts`, `svg/exportSvg.ts`.
     - `card/edit.ts` stubs include `withdrawInference(deck, { cardId, readIndex, actionId }): Result<Deck>` (TSDoc lists `UNKNOWN_CARD`, `READ_INDEX_OUT_OF_RANGE`, `DUPLICATE_ACTION_ID`, `INVALID_EDIT`, `NOTHING_TO_WITHDRAW` in check order) and `latestLiveEntry(cell)`; `WithdrawalInput` is exported.
@@ -139,12 +139,12 @@ Conventions for every task:
     - `_stub.ts` is temporary; task 16.3 asserts that nothing imports it.
     - _Requirements: 5.8, 5.13, 5.17, 5.26, 5.28, 5.21, 6.1, 6.7, 7.1, 8.3, 8.16, 9.1, 10.1, 11.1, 11.6, 12.1, 12.2, 12.3, 12.4, 12.5, 12.8, 15.4, 15.5, 17.3_
 
-  - [ ] 4.3 Create the public index and interface version
+  - [x] 4.3 Create the public index and interface version
     - Create `index.ts` as the single export surface re-exporting all types, functions and constants named in the design, plus `INTERFACE_VERSION = "1.1.0"` (1.1.0 adds `withdrawInference`, `latestLiveEntry`, `PreviousFields`, `WithdrawalEntry`, the `withdraw-inference` session kind, the `withdrawal` approval cause and `NOTHING_TO_WITHDRAW`), `ERROR_CODES` and `ERROR_MESSAGES`.
     - Files owned: `index.ts`.
     - _Requirements: 12.1, 12.3, 12.4, 12.6, 16.1_
 
-  - [ ] 4.4 Add the exported-surface snapshot test
+  - [x] 4.4 Add the exported-surface snapshot test
     - Create `src/domain/__tests__/surface.test.ts` comparing the sorted list of exports of `index.ts` with a committed `surface.snapshot.json`, plus an assertion that `INTERFACE_VERSION` exists.
     - Any later change to the snapshot requires a spec update (Req 12.6).
     - _Requirements: 12.1, 12.6_

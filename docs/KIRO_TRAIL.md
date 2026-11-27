@@ -94,3 +94,14 @@ Verified record of how Kiro was used to build Loom Lazarus. Procedure: `.kiro/st
 - Screenshots: none
 - Commits: this entry's commit
 - Decisions: every Garín field is `unverified`; reserved positions are the row 25 placeholder with basis `geometric-inference`. `gridRow` 0 is the top edge and bottom-up means descending `gridRow` (UNVERIFIED A3, A4). Items for the interface-freeze review: task 4.1 property uses seed 4101 outside the domain seed register; `CompiledProfile` shape and `gridToPhysical` pitch formula chosen by the workers; hook-mapping functions return `Result` and take a local `HookMappingConfig`.
+### 2026-11-26  Domain tasks 3.4, 3.5, 4.2, 4.3, 4.4 (property tests, signature stubs, public index, surface snapshot)
+- Surface: Kiro IDE, `spec-task-execution` sub-agents; 3.4, 3.5 and 4.2 in parallel on disjoint files, then 4.3 and 4.4 in sequence
+- Steering: all always-included files; `testing-standards.md` for the property tests
+- Feature Spec: `card-domain-and-loom-engine` tasks 1 to 4 complete (M0 domain scope). Optional tests 2.4, 3.6 and 3.7 not run
+- Hooks fired: sub-agents reported running the `.gitignore` check (nothing under `.kiro` ignored); trigger source unverified. "Typecheck and test after task": not observed
+- MCP tools used: none
+- Bugfix Spec: none
+- Tests: Property 1 (read-order bijection, seed 20260101, 300 runs, profiles up to 256 x 256) and Property 2 (rejected positions, seed 20260102, 200 runs) pass. The first version of the Property 1 test took about 230 seconds and timed out; its author replaced per-cell assertions in the hot loop and it now runs in about 1.3 seconds. Surface snapshot: 170 exports (78 values, 92 types), interface version 1.1.0. Combined `npm run check`: typecheck passed, 14 files and 79 tests passed. A text search found no "laser-ready", "cut-ready" or "machine-ready" wording in `src`
+- Screenshots: none
+- Commits: this entry's commit
+- Decisions: `CellSeed.initial` is `Omit<CellInitial, "restorationConfidence">`, so callers cannot pass a numeric confidence and `createCard` always writes `null`. `MIGRATIONS` and the schema key tables are not on the public surface. Several stub error-code lists were inferred by the worker and are flagged for review at the interface freeze (task 5).

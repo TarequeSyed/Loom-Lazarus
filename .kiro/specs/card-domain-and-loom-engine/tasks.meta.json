@@ -141,6 +141,73 @@
         "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
         "timestamp": 1795788993594
       }
+    ],
+    "4.2 Declare signature stubs for every remaining module": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795789153134
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795789740692
+      }
+    ],
+    "3.4 Write property test for read-order bijection": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795789153422
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795789741673
+      }
+    ],
+    "3.5 Write property test for rejected positions": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795789153970
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795789742446
+      }
+    ],
+    "4.3 Create the public index and interface version": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795789756391
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795789920654
+      }
+    ],
+    "4.4 Add the exported-surface snapshot test": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795789933946
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795790061346
+      }
+    ],
+    "4. Canonical JSON, interface stubs and public index": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795790061483
+      }
     ]
   }
 }
