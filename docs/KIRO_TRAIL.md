@@ -116,3 +116,14 @@ Verified record of how Kiro was used to build Loom Lazarus. Procedure: `.kiro/st
 - Screenshots: none
 - Commits: none from the run. The repository stayed on `main` at 26a46c7 with a clean working tree, one worktree and no `crew/*` branches
 - Decisions: Crew refused to open a work ledger and to dispatch workers because a session started from the IDE has no identity Crew can verify. It reports that Crew sessions must start from the Kiro Crew dashboard (Conductor mode) with `kirocrew-work` and `kirocrew-dashboard` routed through MCP Management or listed in `mcp_gateway.stub_servers`, checked with `kirocrew doctor`. Crew also has no worktree tool; isolation would come from each worker creating its own `git worktree`. Host free memory was 2.8 GB, which Crew rated tight. Credit meter before the run: 570.47 of 4,000 used (read by the user). Risk R-21 (Crew behaviour unverified) has materialised; the plan's fallback in Section 8.5 applies until Crew runs from the dashboard.
+### 2026-11-26  Domain interface freeze (task 5), after three independent reviews
+- Surface: Kiro IDE; `semantic_reviewer` agent for reviews, `spec-task-execution` sub-agents for fixes (tasks 4.5 to 4.8)
+- Steering: all always-included files; `restoration-principles.md` drove finding R2-5
+- Feature Spec: `card-domain-and-loom-engine` tasks 4.5 to 4.8 and checkpoint 5 complete; requirements and design amended twice ("G1 review resolutions", "G1 review round 2 resolutions")
+- Hooks fired: sub-agents reported the `.gitignore` check each time (nothing under `.kiro` ignored); trigger source unverified. "Typecheck and test after task": not observed
+- MCP tools used: none
+- Bugfix Spec: none
+- Tests: round 1 review FAIL (B-1 hook-mapping signatures and missing profile checks; B-2 `INVALID_DECK` documented without a report type), round 2 FAIL (R2-1 doc mismatch; R2-5 `setInferred` could override an observed cell, against the restoration principles), round 3 PASS. The reviews judged signatures and documented semantics against the spec, not test results. Surface guard now records declaration text; a changed return type or an added optional parameter makes it fail, regeneration is refused under `CI`, and a regeneration run fails after writing (checked live). `npm run check`: typecheck passed, 14 files and 91 tests passed
+- Screenshots: none
+- Commits: ca45a4f, b4f8388, this entry's commit; tag `domain-freeze-1.1.0`
+- Decisions: new error codes `DECK_SHAPE_MISMATCH`, `CARD_INDEX_OUT_OF_RANGE`, `INVALID_APPROVAL_HISTORY`, `OBSERVED_CELL_PROTECTED`. No implicit default for hook mapping or mirror. From this commit, `types.ts`, `result.ts`, `brand.ts`, `limits.ts`, `profile/*`, `index.ts` and every exported signature change only through a spec update. Open non-blocking items: SG-R3-1 (`createDeck` `INVALID_EDIT_HISTORY` lacks a requirement clause), N-R3-1 to N-R3-5 (wording and test details).
