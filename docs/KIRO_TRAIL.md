@@ -83,3 +83,14 @@ Verified record of how Kiro was used to build Loom Lazarus. Procedure: `.kiro/st
 - Screenshots: none
 - Commits: this entry's commit
 - Decisions: task 1.3 reported its own run with one failing boundary self-test, because it ran while task 1.2 was still correcting a test input; the combined rerun passed. Constructor error codes chosen by task 1.3 (`INVALID_FORMAT`, `POSITION_OUT_OF_RANGE`, `READ_INDEX_OUT_OF_RANGE`, `SEEK_OUT_OF_RANGE`) are recorded for review at the interface freeze.
+### 2026-11-26  Domain tasks 2.1, 4.1, 2.2, 2.3, 3.1, 3.2, 3.3 (types, canonical JSON, machine profile, Garín profile, generator, read order, hook mapping)
+- Surface: Kiro IDE, `spec-task-execution` sub-agents. 2.1, 4.1 and 2.2 ran one at a time because the schema key lists depend on the type names; 2.3, 3.1, 3.2 and 3.3 ran in parallel on disjoint files
+- Steering: all always-included files; `jacquard-card-format.md` for the Garín profile values
+- Feature Spec: `card-domain-and-loom-engine` tasks 2 and 3 complete (optional tests 2.4, 3.4 to 3.7 not yet run), 4.1 complete
+- Hooks fired: the sub-agents reported running the `.gitignore` hook's `git check-ignore` check (exit 1, nothing under `.kiro` ignored); trigger source unverified. "Typecheck and test after task": not observed
+- MCP tools used: none
+- Bugfix Spec: none
+- Tests: combined `npm run check` after the parallel batch: typecheck passed, 10 files and 68 tests passed. During the batch, task 3.2 saw two failures in task 3.3's test file that 3.3 then fixed (wrong expected value in its own test), so per-worker reports differed until the combined run
+- Screenshots: none
+- Commits: this entry's commit
+- Decisions: every Garín field is `unverified`; reserved positions are the row 25 placeholder with basis `geometric-inference`. `gridRow` 0 is the top edge and bottom-up means descending `gridRow` (UNVERIFIED A3, A4). Items for the interface-freeze review: task 4.1 property uses seed 4101 outside the domain seed register; `CompiledProfile` shape and `gridToPhysical` pitch formula chosen by the workers; hook-mapping functions return `Result` and take a local `HookMappingConfig`.

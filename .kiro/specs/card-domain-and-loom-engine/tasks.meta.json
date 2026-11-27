@@ -43,6 +43,104 @@
         "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
         "timestamp": 1795726331635
       }
+    ],
+    "2.1 Define the persisted domain types": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795787859211
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788026706
+      }
+    ],
+    "4.1 Implement the canonical JSON writer and schema key walk": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788026941
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788398653
+      }
+    ],
+    "2.2 Implement MachineProfile, validateProfile and compileProfile": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788409176
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788546368
+      }
+    ],
+    "2.3 Add the Garín profile data with unverified markers": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788557847
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788991012
+      }
+    ],
+    "3.3 Implement hook-to-warp mappings": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788558567
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788993419
+      }
+    ],
+    "3.1 Add the profile generator": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788559594
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788991473
+      }
+    ],
+    "3.2 Implement read-order and position conversions": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788560294
+      },
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788992970
+      }
+    ],
+    "2. Domain types and machine profile": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788991239
+      }
+    ],
+    "3. Coordinate and read-order mappings": [
+      {
+        "executionId": "365ad2fc-4ff1-4d2c-a283-f9ff38fee872",
+        "chatSessionId": "sess_4b21e39e-159a-40e2-a5b3-6d96a1c7d83d",
+        "timestamp": 1795788993594
+      }
     ]
   }
 }

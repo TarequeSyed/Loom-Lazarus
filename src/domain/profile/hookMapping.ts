@@ -1,0 +1,97 @@
+/**
+ * Hook-to-warp mappings (design.md, "Hook-to-warp mappings"; Req 14).
+ * Pure index arithmetic. Mirror is applied after the mapping and never alters a Deck.
+ */
+
+import type { ReadIndex, WarpIndex } from "../brand";
+import { LIMITS } from "../limits";
+import { err, makeError, ok } from "../result";
+import type { Result } from "../result";
+import type { HookMappingKind, MachineProfile, MirrorOrientation } from "./machineProfile";
+
+/**
+ * The loom settings these functions read. `LoomConfiguration` (loom/config.ts) satisfies this
+ * structurally; fields are typed loosely so unvalidated input (for example from JSON) is checked at runtime.
+ */
+export interface HookMappingConfig {
+  readonly threadsPerHook: number;
+  readonly hookMapping?: HookMappingKind;
+  readonly mirror?: MirrorOrientation;
+}
+
+const KNOWN_KINDS: readonly string[] = ["contiguous-visualization", "repeat"];
+const KNOWN_MIRRORS: readonly string[] = ["none", "mirrored"];
+
+interface Checked {
+  readonly readableCount: number;
+  readonly threadsPerHook: number;
+  readonly kind: HookMappingKind;
+  readonly mirrored: boolean;
+}
+
+function checkConfig(profile: MachineProfile, cfg: HookMappingConfig): Result<Checked> {
+  const t: unknown = cfg.threadsPerHook;
+  if (typeof t !== "number" || !Number.isInteger(t) || t < 1 || t > LIMITS.maxThreadsPerHook) {
+    return err(
+      makeError(
+        "INVALID_THREADS_PER_HOOK",
+        `Got ${String(t)}; expected an integer in [1, ${LIMITS.maxThreadsPerHook}].`,
+      ),
+    );
+  }
+  const kind: unknown = cfg.hookMapping;
+  if (kind === undefined) return err(makeError("HOOK_MAPPING_NOT_CONFIGURED"));
+  if (typeof kind !== "string" || !KNOWN_KINDS.includes(kind)) {
+    return err(makeError("HOOK_MAPPING_INVALID", `Unknown hook mapping ${String(kind)}.`));
+  }
+  const mirror: unknown = cfg.mirror;
+  if (mirror === undefined) return err(makeError("MIRROR_NOT_CONFIGURED"));
+  if (typeof mirror !== "string" || !KNOWN_MIRRORS.includes(mirror)) {
+    return err(makeError("UNSUPPORTED_MIRROR", `Unknown mirror option ${String(mirror)}.`));
+  }
+  return ok({
+    readableCount: profile.readableCount,
+    threadsPerHook: t,
+    kind: kind as HookMappingKind,
+    mirrored: mirror === "mirrored",
+  });
+}
+
+/** Total warp threads: `readableCount * threadsPerHook`. Identical for both mappings and both mirror options. */
+export function warpCount(profile: MachineProfile, cfg: HookMappingConfig): Result<number> {
+  const c = checkConfig(profile, cfg);
+  if (!c.ok) return c;
+  return ok(c.value.readableCount * c.value.threadsPerHook);
+}
+
+/**
+ * Warp indices driven by one hook, after mirror, sorted ascending.
+ * `hook` is a read index in [0, readableCount).
+ */
+export function hookWarpIndices(
+  profile: MachineProfile,
+  cfg: HookMappingConfig,
+  hook: ReadIndex,
+): Result<readonly WarpIndex[]> {
+  const c = checkConfig(profile, cfg);
+  if (!c.ok) return c;
+  const { readableCount, threadsPerHook: t, kind, mirrored } = c.value;
+  if (typeof hook !== "number" || !Number.isInteger(hook) || hook < 0 || hook >= readableCount) {
+    return err(
+      makeError(
+        "READ_INDEX_OUT_OF_RANGE",
+        `Hook ${String(hook)} is outside 0 to ${readableCount - 1}.`,
+      ),
+    );
+  }
+  const total = readableCount * t;
+  const out: number[] = [];
+  for (let k = 0; k < t; k++) {
+    // UNVERIFIED A5: neither mapping is verified against the paper. See .kiro/steering/jacquard-card-format.md.
+    // UNVERIFIED A11: the default of 16 threads per hook may be a machine property rather than a design one.
+    const w = kind === "contiguous-visualization" ? hook * t + k : hook + k * readableCount;
+    out.push(mirrored ? total - 1 - w : w);
+  }
+  out.sort((a, b) => a - b);
+  return ok(out as unknown as readonly WarpIndex[]);
+}

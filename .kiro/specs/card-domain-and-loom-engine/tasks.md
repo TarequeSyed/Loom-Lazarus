@@ -50,8 +50,8 @@ Conventions for every task:
     - Files owned: `result.ts`, `brand.ts`, `limits.ts`, `src/domain/__tests__/result.test.ts`.
     - _Requirements: 1.3, 3.6, 5.28, 7.13, 16.1, 16.2, 17.2_
 
-- [ ] 2. Domain types and machine profile
-  - [ ] 2.1 Define the persisted domain types
+- [x] 2. Domain types and machine profile
+  - [x] 2.1 Define the persisted domain types
     - Create `types.ts` with `Provenance`, `Bit`, `RawObservation`, `EvidenceRef`, `Evidence`, `CellInitial`, `UserEditEntry`, `PreviousFields` (value or absence, provenance, `confidence: number | null` always present, evidence), `InferenceEntry` (with required `previous: PreviousFields`), `UndoEntry`, `WithdrawalEntry` (`reverses` action id, `restored: PreviousFields`), `EditEntry` (union of all four), `Cell`, `EffectiveView`, `ApprovalState`, `ApprovalRecord` (cause includes `withdrawal`), `Card`, `Deck`, `WeftColourLayer`, `LoomConfiguration`, `LoomConfigInput`, each persisted type carrying `schemaVersion`.
     - Type `restorationConfidence` as `number | null` (required, never optional) on `CellInitial` and `EffectiveView`, and `confidence` as `number | null` on `InferenceEntry` (null only on policy entries that copy a previous null). Add a compile-time type test that `EffectiveView["restorationConfidence"]` is `number | null` and that omitting the field from `CellInitial` does not compile.
     - The `confidence` field of `previous` and `restored` is required and typed `number | null`; add a compile-time test that omitting it does not compile.
@@ -59,14 +59,14 @@ Conventions for every task:
     - Files owned: `types.ts`, `loom/types.ts`, `session/sessionLog.ts`.
     - _Requirements: 1.1, 1.2, 1.7, 1.8, 5.1, 5.2, 5.3, 5.21, 5.25, 5.27, 5.29, 15.1, 15.2, 15.3, 17.3_
 
-  - [ ] 2.2 Implement MachineProfile, validateProfile and compileProfile
+  - [x] 2.2 Implement MachineProfile, validateProfile and compileProfile
     - Create `profile/machineProfile.ts` with `MachineProfile`, `VerificationStatus`, `ProfileFieldKey`, `ReservedPositionSpec`, `EndHoleSpec`, `ReadOrderSpec`, `HookMappingSpec`, `CardToPassSpec`, `PhysicalDimensions`, `validateProfile` and `compileProfile`.
     - `validateProfile` checks rows and columns are integers in [1, 256], reserved positions are distinct and in-grid, `readableCount` equals rows times columns minus reserved count (`PROFILE_COUNT_MISMATCH`), mappings are known (`HOOK_MAPPING_INVALID`), and a `verified` field has a non-empty `source` (`INVALID_PROFILE` naming the field).
     - `compileProfile` builds `gridToRead` and `readToGrid` tables for `column-major` (all four direction pairs) and `explicit` read orders, skipping reserved positions; it is the only place that derives tables, with an optional `WeakMap` cache.
     - Files owned: `profile/machineProfile.ts`.
     - _Requirements: 2.1, 2.4, 2.5, 2.6, 2.7, 2.10, 2.11, 2.12, 14.1, 14.5_
 
-  - [ ] 2.3 Add the Garín profile data with unverified markers
+  - [x] 2.3 Add the Garín profile data with unverified markers
     - Create `profile/garinProfile.ts` exporting `GARIN_PROFILE`: 51 rows, 8 columns, 8 reserved positions, 400 readable, default threads-per-hook 16, both hook mappings permitted, mirror options `none` and `mirrored`, `cardToPass` one-card-per-pass, no physical dimensions, two declared end holes outside the grid with no geometry.
     - Reserved positions are a placeholder (row 25, columns 0 to 7) with status `unverified`, basis `geometric-inference` and a note that the location is inferred from the 51 x 8 geometry, is a placeholder and was not observed in the paper's figures.
     - Mark every field in the assumptions table (A1 to A9, A11) `unverified` with a basis and note, and add `// UNVERIFIED A<n>` comments at each dependent value.
@@ -80,19 +80,19 @@ Conventions for every task:
     - Files owned: `src/domain/__tests__/profile.test.ts`.
     - _Requirements: 2.2, 2.3, 2.5, 2.6, 2.9, 2.11, 2.12, 13.16_
 
-- [ ] 3. Coordinate and read-order mappings
-  - [ ] 3.1 Add the profile generator
+- [x] 3. Coordinate and read-order mappings
+  - [x] 3.1 Add the profile generator
     - Create `src/domain/__tests__/generators/profile.ts` with `arbProfile` (rows and columns in [1, 16] by default, up to 256 for table-only use; reserved set via seeded shuffle of size 0 to `min(8, rows * cols - 1)`; column-major in all four direction pairs and explicit permutations; non-empty permitted mappings; mirror options including `none`), `arbReservedList` and `arbPosition`. Output always passes `validateProfile`.
     - Files owned: `src/domain/__tests__/generators/profile.ts`.
     - _Requirements: 13.2, 13.4, 13.5, 13.16_
 
-  - [ ] 3.2 Implement read-order and position conversions
+  - [x] 3.2 Implement read-order and position conversions
     - Create `profile/readOrder.ts` with `gridToReadIndex` (`POSITION_OUT_OF_RANGE`, `RESERVED_POSITION`), `readIndexToGrid` (`READ_INDEX_OUT_OF_RANGE`) and `gridToPhysical` (`PHYSICAL_DIMENSIONS_UNAVAILABLE`, no estimation from grid coordinates), using `compileProfile` tables.
     - Add `// UNVERIFIED A3` and `// UNVERIFIED A4` comments for the bottom-up and right-to-left direction (descending `gridRow`, row 0 at top as drawn).
     - Files owned: `profile/readOrder.ts`.
     - _Requirements: 3.4, 3.5, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.8, 4.9_
 
-  - [ ] 3.3 Implement hook-to-warp mappings
+  - [x] 3.3 Implement hook-to-warp mappings
     - Create `profile/hookMapping.ts` with `warpCount`, `hookWarpIndices` for `contiguous-visualization` (`h * t + k`) and `repeat` (`h + k * readableCount`), mirror applied afterwards as `warpCount - 1 - w`, results sorted ascending.
     - Add `// UNVERIFIED A5` and `// UNVERIFIED A11` comments.
     - Files owned: `profile/hookMapping.ts`.
@@ -123,7 +123,7 @@ Conventions for every task:
     - Files owned: `src/domain/__tests__/hookMapping.props.test.ts`.
 
 - [ ] 4. Canonical JSON, interface stubs and public index
-  - [ ] 4.1 Implement the canonical JSON writer and schema key walk
+  - [x] 4.1 Implement the canonical JSON writer and schema key walk
     - Create `io/canonicalJson.ts`: schema-ordered stable writer, two-space indent, `\n` line endings, finite numbers only, absent optional fields omitted, no timestamps. Exception: `restorationConfidence` (and an inference entry's `confidence`) is always written, and `null` is written as the JSON literal `null`, never coerced to `0` or omitted.
     - Create `io/schema.ts`: key lists per persisted type and an unknown-field walk returning `UNKNOWN_FIELD` with a path.
     - Unit tests: equal values give byte-identical text, key order is stable, non-finite numbers are rejected, unknown fields are reported with a path, `null` confidence is written as `null` and `0` as `0` (distinct text).
